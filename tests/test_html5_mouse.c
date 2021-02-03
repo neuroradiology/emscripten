@@ -1,3 +1,10 @@
+/*
+ * Copyright 2014 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <stdio.h>
 #include <emscripten.h>
 #include <string.h>
@@ -11,7 +18,7 @@ void report_result(int result)
     printf("Test failed!\n");
   }
 #ifdef REPORT_RESULT
-  REPORT_RESULT();
+  REPORT_RESULT(result);
 #endif
 }
 
@@ -62,12 +69,12 @@ void instruction()
 
 EM_BOOL mouse_callback(int eventType, const EmscriptenMouseEvent *e, void *userData)
 {
-  printf("%s, screen: (%ld,%ld), client: (%ld,%ld),%s%s%s%s button: %hu, buttons: %hu, movement: (%ld,%ld), canvas: (%ld,%ld), target: (%ld, %ld)\n",
+  printf("%s, screen: (%ld,%ld), client: (%ld,%ld),%s%s%s%s button: %hu, buttons: %hu, movement: (%ld,%ld), target: (%ld, %ld)\n",
     emscripten_event_type_to_string(eventType), e->screenX, e->screenY, e->clientX, e->clientY,
     e->ctrlKey ? " CTRL" : "", e->shiftKey ? " SHIFT" : "", e->altKey ? " ALT" : "", e->metaKey ? " META" : "", 
-    e->button, e->buttons, e->movementX, e->movementY, e->canvasX, e->canvasY, e->targetX, e->targetY);
+    e->button, e->buttons, e->movementX, e->movementY, e->targetX, e->targetY);
 
-  if (e->screenX != 0 && e->screenY != 0 && e->clientX != 0 && e->clientY != 0 && e->canvasX != 0 && e->canvasY != 0 && e->targetX != 0 && e->targetY != 0)
+  if (e->screenX != 0 && e->screenY != 0 && e->clientX != 0 && e->clientY != 0 && e->targetX != 0 && e->targetY != 0)
   {
     if (eventType == EMSCRIPTEN_EVENT_CLICK) gotClick = 1;
     if (eventType == EMSCRIPTEN_EVENT_MOUSEDOWN && e->buttons != 0) gotMouseDown = 1;
@@ -89,10 +96,10 @@ EM_BOOL mouse_callback(int eventType, const EmscriptenMouseEvent *e, void *userD
 
 EM_BOOL wheel_callback(int eventType, const EmscriptenWheelEvent *e, void *userData)
 {
-  printf("%s, screen: (%ld,%ld), client: (%ld,%ld),%s%s%s%s button: %hu, buttons: %hu, canvas: (%ld,%ld), target: (%ld, %ld), delta:(%g,%g,%g), deltaMode:%lu\n",
+  printf("%s, screen: (%ld,%ld), client: (%ld,%ld),%s%s%s%s button: %hu, buttons: %hu, target: (%ld, %ld), delta:(%g,%g,%g), deltaMode:%lu\n",
     emscripten_event_type_to_string(eventType), e->mouse.screenX, e->mouse.screenY, e->mouse.clientX, e->mouse.clientY,
     e->mouse.ctrlKey ? " CTRL" : "", e->mouse.shiftKey ? " SHIFT" : "", e->mouse.altKey ? " ALT" : "", e->mouse.metaKey ? " META" : "", 
-    e->mouse.button, e->mouse.buttons, e->mouse.canvasX, e->mouse.canvasY, e->mouse.targetX, e->mouse.targetY,
+    e->mouse.button, e->mouse.buttons, e->mouse.targetX, e->mouse.targetY,
     (float)e->deltaX, (float)e->deltaY, (float)e->deltaZ, e->deltaMode);
 
   if (e->deltaY > 0.f || e->deltaY < 0.f)
@@ -105,21 +112,21 @@ EM_BOOL wheel_callback(int eventType, const EmscriptenWheelEvent *e, void *userD
 int main()
 {
   // Make the canvas area stand out from the background.
-  emscripten_set_canvas_size(400, 300);
+  emscripten_set_canvas_element_size("#canvas", 400, 300);
   EM_ASM(Module['canvas'].style.backgroundColor = 'black';);
 
-  EMSCRIPTEN_RESULT ret = emscripten_set_click_callback(0, 0, 1, mouse_callback);
+  EMSCRIPTEN_RESULT ret = emscripten_set_click_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, mouse_callback);
   TEST_RESULT(emscripten_set_click_callback);
-  ret = emscripten_set_mousedown_callback(0, 0, 1, mouse_callback);
+  ret = emscripten_set_mousedown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, mouse_callback);
   TEST_RESULT(emscripten_set_mousedown_callback);
-  ret = emscripten_set_mouseup_callback(0, 0, 1, mouse_callback);
+  ret = emscripten_set_mouseup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, mouse_callback);
   TEST_RESULT(emscripten_set_mouseup_callback);
-  ret = emscripten_set_dblclick_callback(0, 0, 1, mouse_callback);
+  ret = emscripten_set_dblclick_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, mouse_callback);
   TEST_RESULT(emscripten_set_dblclick_callback);
-  ret = emscripten_set_mousemove_callback(0, 0, 1, mouse_callback);
+  ret = emscripten_set_mousemove_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, mouse_callback);
   TEST_RESULT(emscripten_set_mousemove_callback);
 
-  ret = emscripten_set_wheel_callback(0, 0, 1, wheel_callback);
+  ret = emscripten_set_wheel_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, wheel_callback);
   TEST_RESULT(emscripten_set_wheel_callback);
 
 #ifdef AUTOMATE_SUCCESS
@@ -130,10 +137,23 @@ int main()
       for(var d in data) event[d] = data[d];
       window.dispatchEvent(event);
     }
-    sendEvent('click', { screenX: 1, screenY: 1, clientX: 1, clientY: 1, button: 0, buttons: 1 });
+    sendEvent('click', { screenX: 123, screenY: 456, clientX: 123, clientY: 456, button: 0, buttons: 1 });
   );
+
+  // get_mouse_status should contain the results of the last event
+  EmscriptenMouseEvent mouseEvent;
+  ret = emscripten_get_mouse_status(&mouseEvent);
+  TEST_RESULT(emscripten_get_mouse_status);
+
+  if (mouseEvent.screenX != 123 || mouseEvent.screenY != 456
+    || mouseEvent.clientX != 123 || mouseEvent.clientY != 456)
+  {
+    printf("ERROR! Incorrect mouse status\n");
+    report_result(1);
+  }
+
   // Test that unregistering a callback works. Clicks should no longer be received.
-  ret = emscripten_set_click_callback(0, 0, 1, 0);
+  ret = emscripten_set_click_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, 0, 1, 0);
   TEST_RESULT(emscripten_set_click_callback);
 
   EM_ASM(
@@ -153,8 +173,5 @@ int main()
   );
 #endif
 
-  /* For the events to function, one must either call emscripten_set_main_loop or enable Module.noExitRuntime by some other means. 
-     Otherwise the application will exit after leaving main(), and the atexit handlers will clean up all event hooks (by design). */
-  EM_ASM(Module['noExitRuntime'] = true);
   return 0;
 }

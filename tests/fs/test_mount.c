@@ -1,3 +1,10 @@
+/*
+ * Copyright 2014 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <assert.h>
 #include <stdio.h>
 #include <emscripten.h>
@@ -5,6 +12,7 @@
 int main() {
   EM_ASM(
     var ex;
+    var contents;
 
     // write a file that should be unaffected by this process
     FS.writeFile('/safe.txt', 'abc');
@@ -14,13 +22,17 @@ int main() {
     FS.mount(MEMFS, {}, '/working');
     FS.writeFile('/working/waka.txt', 'az');
 
+    // check the waka file
+    contents = FS.readFile('/working/waka.txt', { encoding: 'utf8' });
+    assert(contents === 'az');
+
     // mount to a missing directory
     try {
       FS.mount(MEMFS, {}, '/missing');
     } catch (e) {
       ex = e;
     }
-    assert(ex instanceof FS.ErrnoError && ex.errno === ERRNO_CODES.ENOENT);
+    assert(ex instanceof FS.ErrnoError && ex.errno === 44); // ENOENT
 
     // mount to an existing mountpoint
     try {
@@ -28,7 +40,7 @@ int main() {
     } catch (e) {
       ex = e;
     }
-    assert(ex instanceof FS.ErrnoError && ex.errno === ERRNO_CODES.EBUSY);
+    assert(ex instanceof FS.ErrnoError && ex.errno === 10); // EBUSY
 
     // unmount
     FS.unmount('/working');
@@ -39,7 +51,11 @@ int main() {
     } catch (e) {
       ex = e;
     }
-    assert(ex instanceof FS.ErrnoError && ex.errno === ERRNO_CODES.EINVAL);
+    assert(ex instanceof FS.ErrnoError && ex.errno === 28); // EINVAL
+
+    // mount and unmount again
+    FS.mount(MEMFS, {}, '/working');
+    FS.unmount('/working');
 
     // try to read the file from the old mount
     try {
@@ -47,10 +63,10 @@ int main() {
     } catch (e) {
       ex = e;
     }
-    assert(ex instanceof FS.ErrnoError && ex.errno === ERRNO_CODES.ENOENT);
+    assert(ex instanceof FS.ErrnoError && ex.errno === 44); // ENOENT
 
     // check the safe file
-    var contents = FS.readFile('/safe.txt', { encoding: 'utf8' });
+    contents = FS.readFile('/safe.txt', { encoding: 'utf8' });
     assert(contents === 'abc');
   );
 

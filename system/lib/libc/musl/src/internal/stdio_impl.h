@@ -38,14 +38,16 @@ struct _IO_FILE {
 	short dummy3;
 	signed char mode;
 	signed char lbf;
-	int lock;
-	int waiters;
+	volatile int lock;
+	volatile int waiters;
 	void *cookie;
 	off_t off;
 	char *getln_buf;
 	void *mustbezero_2;
 	unsigned char *shend;
 	off_t shlim, shcnt;
+	FILE *prev_locked, *next_locked;
+	struct __locale_struct *locale;
 };
 
 size_t __stdio_read(FILE *, unsigned char *, size_t);
@@ -59,7 +61,7 @@ size_t __string_read(FILE *, unsigned char *, size_t);
 int __toread(FILE *);
 int __towrite(FILE *);
 
-#if defined(__PIC__) && (100*__GNUC__+__GNUC_MINOR__ >= 303)
+#if defined(__PIC__) && (100*__GNUC__+__GNUC_MINOR__ >= 303) && !defined(__EMSCRIPTEN__)
 __attribute__((visibility("protected")))
 #endif
 int __overflow(FILE *, int), __uflow(FILE *);
@@ -74,8 +76,9 @@ int __putc_unlocked(int, FILE *);
 FILE *__fdopen(int, const char *);
 int __fmodeflags(const char *);
 
-#define OFLLOCK() LOCK(libc.ofl_lock)
-#define OFLUNLOCK() UNLOCK(libc.ofl_lock)
+FILE *__ofl_add(FILE *f);
+FILE **__ofl_lock(void);
+void __ofl_unlock(void);
 
 #define feof(f) ((f)->flags & F_EOF)
 #define ferror(f) ((f)->flags & F_ERR)
@@ -83,11 +86,20 @@ int __fmodeflags(const char *);
 #define getc_unlocked(f) \
 	( ((f)->rpos < (f)->rend) ? *(f)->rpos++ : __uflow((f)) )
 
-#define putc_unlocked(c, f) ( ((c)!=(f)->lbf && (f)->wpos<(f)->wend) \
+#define putc_unlocked(c, f) \
+	( ((unsigned char)(c)!=(f)->lbf && (f)->wpos<(f)->wend) \
 	? *(f)->wpos++ = (c) : __overflow((f),(c)) )
 
 /* Caller-allocated FILE * operations */
 FILE *__fopen_rb_ca(const char *, FILE *, unsigned char *, size_t);
 int __fclose_ca(FILE *);
+
+// XXX EMSCRIPTEN
+extern int vfiprintf(FILE *restrict f, const char *restrict fmt, va_list ap);
+extern int vsiprintf(char *restrict s, const char *restrict fmt, va_list ap);
+extern int vsniprintf(char *restrict s, size_t n, const char *restrict fmt, va_list ap);
+extern int __small_vfprintf(FILE *restrict f, const char *restrict fmt, va_list ap);
+extern int __small_vsprintf(char *restrict s, const char *restrict fmt, va_list ap);
+extern int __small_vsnprintf(char *restrict s, size_t n, const char *restrict fmt, va_list ap);
 
 #endif

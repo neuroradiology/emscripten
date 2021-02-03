@@ -1,3 +1,10 @@
+/*
+ * Copyright 2014 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <GLFW/glfw3.h>
 #include <stdio.h>
 #include <assert.h>
@@ -22,22 +29,34 @@ static void wmbutcb(GLFWwindow *window, int button, int action, int mods) {
 static void wcurpcb(GLFWwindow *window, double x, double y) { assert(window != NULL); (void)x; (void)y; }
 static void wcurecb(GLFWwindow *window, int entered) { assert(window != NULL); (void)entered; }
 static void wscrocb(GLFWwindow *window, double x, double y) { assert(window != NULL); (void)x; (void)y; }
+static void wdropcb(GLFWwindow *window, int count, const char **paths) {
+    assert(window != NULL); (void)count; (void)paths;
+}
+
+#define TEST_GLFW_SET_I(Function, Value) \
+assert(glfwSet##Function(Value) == NULL);  /* Default value (no callback was set) */ \
+assert(glfwSet##Function(Value) == Value); /* The previously set callback */
+
+#define TEST_GLFW_SET_II(Function, Window, Value) \
+assert(glfwSet##Function(Window, Value) == NULL);  /* Default value (no callback was set) */ \
+assert(glfwSet##Function(Window, Value) == Value); /* The previously set callback */
 
 int main()
 {
     GLFWwindow *window;
     char *userptr = "userptr";
 
-    glfwSetErrorCallback(errorcb);
+    TEST_GLFW_SET_I(ErrorCallback, errorcb)
     assert(glfwInit() == GL_TRUE);
-    assert(!strcmp(glfwGetVersionString(), "3.0.0 JS WebGL Emscripten"));
+    assert(!strcmp(glfwGetVersionString(), "3.2.1 JS WebGL Emscripten"));
+    assert(glfwGetCurrentContext() == NULL);
 
     {
         int major, minor, rev;
         glfwGetVersion(&major, &minor, &rev);
         assert(major == 3);
-        assert(minor == 0);
-        assert(rev == 0);
+        assert(minor == 2);
+        assert(rev == 1);
     }
 
     {
@@ -52,7 +71,7 @@ int main()
         glfwGetMonitorPos(monitors[0], &x, &y);
         glfwGetMonitorPhysicalSize(monitors[0], &w, &h);
         assert(glfwGetMonitorName(monitors[0]) != NULL);
-        glfwSetMonitorCallback(monitcb);
+        TEST_GLFW_SET_I(MonitorCallback, monitcb)
 
         // XXX: not implemented
         // assert(glfwGetVideoModes(monitors[0], &count) != NULL);
@@ -65,18 +84,25 @@ int main()
     {
         int x, y, w, h;
         glfwDefaultWindowHints();
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+        glfwWindowHint(GLFW_CLIENT_API, CLIENT_API);
 
         window = glfwCreateWindow(640, 480, "glfw3.c", NULL, NULL);
         assert(window != NULL);
 
-        glfwSetWindowPosCallback(window, wposicb);
-        glfwSetWindowSizeCallback(window, wsizecb);
-        glfwSetWindowCloseCallback(window, wcloscb);
-        glfwSetWindowRefreshCallback(window, wrfrscb);
-        glfwSetWindowFocusCallback(window, wfocucb);
-        glfwSetWindowIconifyCallback(window, wiconcb);
-        glfwSetFramebufferSizeCallback(window, wfsizcb);
+        TEST_GLFW_SET_II(WindowPosCallback, window, wposicb)
+        TEST_GLFW_SET_II(WindowSizeCallback, window, wsizecb)
+        TEST_GLFW_SET_II(WindowCloseCallback, window, wcloscb)
+        TEST_GLFW_SET_II(WindowRefreshCallback, window, wrfrscb)
+        TEST_GLFW_SET_II(WindowFocusCallback, window, wfocucb)
+        TEST_GLFW_SET_II(WindowIconifyCallback, window, wiconcb)
+        TEST_GLFW_SET_II(FramebufferSizeCallback, window, wfsizcb)
+        TEST_GLFW_SET_II(KeyCallback, window, wkeypcb)
+        TEST_GLFW_SET_II(CharCallback, window, wcharcb)
+        TEST_GLFW_SET_II(MouseButtonCallback, window, wmbutcb)
+        TEST_GLFW_SET_II(CursorPosCallback, window, wcurpcb)
+        TEST_GLFW_SET_II(CursorEnterCallback, window, wcurecb)
+        TEST_GLFW_SET_II(ScrollCallback, window, wscrocb)
+        TEST_GLFW_SET_II(DropCallback, window, wdropcb)
 
         assert(glfwWindowShouldClose(window) == 0);
         glfwSetWindowShouldClose(window, 1);
@@ -116,7 +142,7 @@ int main()
         window = glfwCreateWindow(640, 480, "glfw3.c", NULL, NULL);
         assert(window != NULL);
 
-        assert(glfwGetWindowAttrib(window, GLFW_CLIENT_API) == GLFW_OPENGL_ES_API);
+        assert(glfwGetWindowAttrib(window, GLFW_CLIENT_API) == CLIENT_API);
 
         assert(glfwGetWindowUserPointer(window) == NULL);
         glfwSetWindowUserPointer(window, userptr);
@@ -169,6 +195,7 @@ int main()
         glfwSetTime(0);
     }
 
+#if CLIENT_API == GLFW_OPENGL_ES_API
     {
         glfwMakeContextCurrent(window); // stub
         assert(glfwGetCurrentContext() == window);
@@ -180,12 +207,12 @@ int main()
         assert(glfwExtensionSupported("nonexistant") == 0);
         assert(glfwGetProcAddress("nonexistant") == NULL);
     }
+#endif
 
     glfwTerminate();
 
 #ifdef REPORT_RESULT
-    int result = 1;
-    REPORT_RESULT();
+    REPORT_RESULT(1);
 #endif
     return 0;
 }

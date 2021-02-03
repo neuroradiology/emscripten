@@ -1,3 +1,8 @@
+// Copyright 2013 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
 #include <stdio.h>
 #include <string>
 #include <emscripten.h>
@@ -16,10 +21,10 @@ int main() {
 	if (sizeof(wchar_t) == 4) {
 		utf32 *memory = new utf32[wstr.length()+1];
 
-		EM_ASM_INT({
-			var str = Module.UTF32ToString($0);
-			Module.print(str);
-			var numBytesWritten = Module.stringToUTF32(str, $1, $2);
+		EM_ASM({
+			var str = UTF32ToString($0);
+			out(str);
+			var numBytesWritten = stringToUTF32(str, $1, $2);
 			if (numBytesWritten != 23*4) throw 'stringToUTF32 wrote an invalid length ' + numBytesWritten;
 		}, wstr.c_str(), memory, (wstr.length()+1)*sizeof(utf32));
 
@@ -31,10 +36,10 @@ int main() {
 				break;
 		}
 
-		EM_ASM_INT({
-			var str = Module.UTF32ToString($0);
-			Module.print(str);
-			var numBytesWritten = Module.stringToUTF32(str, $1, $2);
+		EM_ASM({
+			var str = UTF32ToString($0);
+			out(str);
+			var numBytesWritten = stringToUTF32(str, $1, $2);
 			if (numBytesWritten != 5*4) throw 'stringToUTF32 wrote an invalid length ' + numBytesWritten;
 		}, wstr.c_str(), memory, 6*sizeof(utf32));
 		assert(memory[5] == 0);
@@ -43,10 +48,10 @@ int main() {
 	} else { // sizeof(wchar_t) == 2, and we're building with -fshort-wchar.
 		utf16 *memory = new utf16[2*wstr.length()+1];
 
-		EM_ASM_INT({
-			var str = Module.UTF16ToString($0);
-			Module.print(str);
-			var numBytesWritten = Module.stringToUTF16(str, $1, $2);
+		EM_ASM({
+			var str = UTF16ToString($0);
+			out(str);
+			var numBytesWritten = stringToUTF16(str, $1, $2);
 			if (numBytesWritten != 25*2) throw 'stringToUTF16 wrote an invalid length ' + numBytesWritten;
 		}, wstr.c_str(), memory, (2*wstr.length()+1)*sizeof(utf16));
 
@@ -58,10 +63,10 @@ int main() {
 				break;
 		}
 
-		EM_ASM_INT({
-			var str = Module.UTF16ToString($0);
-			Module.print(str);
-			var numBytesWritten = Module.stringToUTF16(str, $1, $2);
+		EM_ASM({
+			var str = UTF16ToString($0);
+			out(str);
+			var numBytesWritten = stringToUTF16(str, $1, $2);
 			if (numBytesWritten != 5*2) throw 'stringToUTF16 wrote an invalid length ' + numBytesWritten;
 		}, wstr.c_str(), memory, 6*sizeof(utf16));
 		assert(memory[5] == 0);

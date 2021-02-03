@@ -1,4 +1,11 @@
 /*
+ * Copyright 2016 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
+/*
  * This is a RANDOMLY GENERATED PROGRAM.
  *
  * Generator: csmith 2.2.0
@@ -1778,8 +1785,3 @@ breakdown:
 XXX percentage a fresh-made variable is used: 17.8
 XXX percentage an existing variable is used: 82.2
 ********************* end of statistics **********************/
-
-
-// /usr/bin/python /Users/achoudhury/Code/emscripten/emscripten/emcc -Oz --llvm-opts 1 /Users/achoudhury/Code/emscripten/emscripten/tests/fuzz/temp_fuzzcode28225_.cpp -o /Users/achoudhury/Code/emscripten/emscripten/tests/fuzz/fuzz.cpp -I /usr/local/Cellar/csmith/2.2.0/include/csmith-2.2.0/runtime -s ELIMINATE_DUPLICATE_FUNCTIONS=1 --emit-symbol-map -w -s MAIN_MODULE=1 -s EMTERPRETIFY=1 -s EMTERPRETIFY_WHITELIST=["_main"]
-
-

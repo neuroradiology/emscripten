@@ -15,18 +15,23 @@
 #define LD_B1B_MAX 9007199, 254740991
 #define KMAX 128
 
-#else /* LDBL_MANT_DIG == 64 && LDBL_MAX_EXP == 16384 */
+#elif LDBL_MANT_DIG == 64 && LDBL_MAX_EXP == 16384
 
 #define LD_B1B_DIG 3
 #define LD_B1B_MAX 18, 446744073, 709551615
 #define KMAX 2048
 
+#elif LDBL_MANT_DIG == 113 && LDBL_MAX_EXP == 16384
+
+#define LD_B1B_DIG 4
+#define LD_B1B_MAX 10384593, 717069655, 257060992, 658440191
+#define KMAX 2048
+
+#else
+#error Unsupported long double representation
 #endif
 
 #define MASK (KMAX-1)
-
-#define CONCAT2(x,y) x ## y
-#define CONCAT(x,y) CONCAT2(x,y)
 
 static long long scanexp(FILE *f, int pok)
 {
@@ -102,7 +107,10 @@ static long double decfloat(FILE *f, int c, int bits, int emin, int sign, int po
 			gotdig=1;
 		} else {
 			dc++;
-			if (c!='0') x[KMAX-4] |= 1;
+			if (c!='0') {
+				lnz = (KMAX-4)*9;
+				x[KMAX-4] |= 1;
+			}
 		}
 	}
 	if (!gotrad) lrp=dc;
@@ -163,6 +171,9 @@ static long double decfloat(FILE *f, int c, int bits, int emin, int sign, int po
 		if (bitlim>30 || x[0]>>bitlim==0)
 			return sign * (long double)x[0] * p10s[rp-10];
 	}
+
+	/* Drop trailing zeros */
+	for (; !x[z-1]; z--);
 
 	/* Align radix point to B1B digit boundary */
 	if (rp % 9) {
@@ -287,7 +298,7 @@ static long double decfloat(FILE *f, int c, int bits, int emin, int sign, int po
 	y -= bias;
 
 	if ((e2+LDBL_MANT_DIG & INT_MAX) > emax-5) {
-		if (fabs(y) >= CONCAT(0x1p, LDBL_MANT_DIG)) {
+		if (fabsl(y) >= 2/LDBL_EPSILON) {
 			if (denormal && bits==LDBL_MANT_DIG+e2-emin)
 				denormal = 0;
 			y *= 0.5;

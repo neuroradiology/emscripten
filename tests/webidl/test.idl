@@ -9,7 +9,7 @@ interface Parent {
   [Const] Parent getAsConst();
   VoidPtr voidStar(VoidPtr something);
   boolean getBoolean();
-
+  attribute long attr;
   readonly attribute long immutableAttr;
 };
 
@@ -30,8 +30,8 @@ interface Child2 {
   void virtualFunc2();
   void virtualFunc3(long x);
   void virtualFunc4(long x);
-  static void runVirtualFunc(Child2 self);
-  static void runVirtualFunc3(Child2 self, long x);
+  static void runVirtualFunc(Child2 myself);
+  static void runVirtualFunc3(Child2 myself, long x);
 };
 
 Child2 implements Parent;
@@ -43,6 +43,18 @@ interface Child2JS {
   void virtualFunc2();
   void virtualFunc3(long x);
   void virtualFunc4(long x);
+};
+
+interface VirtualBase {
+  void func();
+  void constFunc();
+};
+
+[JSImplementation="VirtualBase"]
+interface ConcreteJS {
+  void ConcreteJS();
+  void func();
+  [Const] void constFunc();
 };
 
 // Part 2
@@ -76,6 +88,18 @@ interface Inner {
   void Inner();
   long get();
   [Operator="*=", Ref] Inner mul(float x);
+  [Operator="[]"] long getAsArray(long x);
+  [Operator="+="] void incInPlace([Const, Ref] Inner i);
+};
+
+[Prefix = "Space::"]
+interface InnerUserBase {
+};
+
+[JSImplementation = "InnerUserBase"]
+interface InnerUser {
+  void InnerUser();
+  void Callback(Inner inner);
 };
 
 enum AnEnum {
@@ -134,3 +158,14 @@ interface ReceiveArrays {
   void giveMeArrays(float[] vertices, long[] triangles, long num);
 };
 
+interface StoreArray {
+  void StoreArray();
+
+  void setArray([Const] long[] array);
+  long getArrayValue(long index);
+};
+
+interface LongLongTypes {
+  readonly attribute unsigned long long[] lluArray;
+  attribute long long ll;
+};

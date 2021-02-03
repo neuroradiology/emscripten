@@ -1,3 +1,8 @@
+// Copyright 2015 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
 // *** Environment setup code ***
 var arguments_ = [];
 var debug = false;
@@ -145,8 +150,8 @@ if (!(data instanceof ArrayBuffer)) {
 
 var start = Date.now();
 var compressedData = MiniLZ4.compressPackage(data);
-nodeFS['writeFileSync'](output, Buffer(compressedData.data));
-compressedData.data = null;
+nodeFS['writeFileSync'](output, Buffer(compressedData['data']));
+compressedData['data'] = null;
 printErr('compressed in ' + (Date.now() - start) + ' ms');
 print(JSON.stringify(compressedData));
 

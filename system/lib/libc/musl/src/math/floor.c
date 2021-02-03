@@ -1,7 +1,19 @@
 #include "libm.h"
 
+#if FLT_EVAL_METHOD==0 || FLT_EVAL_METHOD==1
+#define EPS DBL_EPSILON
+#elif FLT_EVAL_METHOD==2
+#define EPS LDBL_EPSILON
+#endif
+static const double_t toint = 1/EPS;
+
 double floor(double x)
 {
+// XXX EMSCRIPTEN: use the wasm instruction via clang builtin
+// See https://github.com/emscripten-core/emscripten/issues/9236
+#ifdef __wasm__
+	return __builtin_floor(x);
+#else
 	union {double f; uint64_t i;} u = {x};
 	int e = u.i >> 52 & 0x7ff;
 	double_t y;
@@ -10,9 +22,9 @@ double floor(double x)
 		return x;
 	/* y = int(x) - x, where int(x) is an integer neighbor of x */
 	if (u.i >> 63)
-		y = (double)(x - 0x1p52) + 0x1p52 - x;
+		y = x - toint + toint - x;
 	else
-		y = (double)(x + 0x1p52) - 0x1p52 - x;
+		y = x + toint - toint - x;
 	/* special case because of non-nearest rounding modes */
 	if (e <= 0x3ff-1) {
 		FORCE_EVAL(y);
@@ -21,4 +33,5 @@ double floor(double x)
 	if (y > 0)
 		return x + y - 1;
 	return x + y;
+#endif
 }

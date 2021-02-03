@@ -1,18 +1,26 @@
+/**
+ * @license
+ * Copyright 2014 The Emscripten Authors
+ * SPDX-License-Identifier: MIT
+ */
+
 // 'use strict'
 var funs = {
   _sigalrm_handler: 0,
 
   signal__deps: ['_sigalrm_handler'],
   signal: function(sig, func) {
-    if (sig == 14 /*SIGALRM*/) {
+    if (sig == {{{ cDefine('SIGALRM') }}}) {
       __sigalrm_handler = func;
     } else {
 #if ASSERTIONS
-      Module.printErr('Calling stub instead of signal()');
+      err('Calling stub instead of signal()');
 #endif
     }
     return 0;
   },
+  bsd_signal__sig: 'iii',
+  bsd_signal: 'signal',
   sigemptyset: function(set) {
     {{{ makeSetValue('set', '0', '0', 'i32') }}};
     return 0;
@@ -35,63 +43,68 @@ var funs = {
   sigaction: function(signum, act, oldact) {
     //int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
 #if ASSERTIONS
-    Module.printErr('Calling stub instead of sigaction()');
+    err('Calling stub instead of sigaction()');
 #endif
     return 0;
   },
   sigprocmask: function() {
 #if ASSERTIONS
-    Module.printErr('Calling stub instead of sigprocmask()');
+    err('Calling stub instead of sigprocmask()');
 #endif
+    return 0;
+  },
+  // pthread_sigmask - examine and change mask of blocked signals
+  pthread_sigmask: function(how, set, oldset) {
+    err('pthread_sigmask() is not supported: this is a no-op.');
     return 0;
   },
   __libc_current_sigrtmin: function() {
 #if ASSERTIONS
-    Module.printErr('Calling stub instead of __libc_current_sigrtmin');
+    err('Calling stub instead of __libc_current_sigrtmin');
 #endif
     return 0;
   },
   __libc_current_sigrtmax: function() {
 #if ASSERTIONS
-    Module.printErr('Calling stub instead of __libc_current_sigrtmax');
+    err('Calling stub instead of __libc_current_sigrtmax');
 #endif
     return 0;
   },
-  kill__deps: ['$ERRNO_CODES', '__setErrNo'],
+  kill__deps: ['$ERRNO_CODES', '$setErrNo'],
   kill: function(pid, sig) {
     // http://pubs.opengroup.org/onlinepubs/000095399/functions/kill.html
     // Makes no sense in a single-process environment.
 	  // Should kill itself somtimes depending on `pid`
 #if ASSERTIONS
-    Module.printErr('Calling stub instead of kill()');
+    err('Calling stub instead of kill()');
 #endif
-    ___setErrNo(ERRNO_CODES.EPERM);
+    setErrNo(ERRNO_CODES.EPERM);
     return -1;
   },
 
-  killpg__deps: ['$ERRNO_CODES', '__setErrNo'],
+  killpg__deps: ['$ERRNO_CODES', '$setErrNo'],
   killpg: function() {
 #if ASSERTIONS
-    Module.printErr('Calling stub instead of killpg()');
+    err('Calling stub instead of killpg()');
 #endif
-    ___setErrNo(ERRNO_CODES.EPERM);
+    setErrNo(ERRNO_CODES.EPERM);
     return -1;
   },
   siginterrupt: function() {
 #if ASSERTIONS
-    Module.printErr('Calling stub instead of siginterrupt()');
+    err('Calling stub instead of siginterrupt()');
 #endif
     return 0;
   },
 
-  raise__deps: ['$ERRNO_CODES', '__setErrNo'],
+  raise__deps: ['$ERRNO_CODES', '$setErrNo'],
   raise: function(sig) {
 #if ASSERTIONS
-    Module.printErr('Calling stub instead of raise()');
+    err('Calling stub instead of raise()');
 #endif
-  ___setErrNo(ERRNO_CODES.ENOSYS);
+  setErrNo(ERRNO_CODES.ENOSYS);
 #if ASSERTIONS
-      Runtime.warnOnce('raise() returning an error as we do not support it');
+    warnOnce('raise() returning an error as we do not support it');
 #endif
     return -1;
   },
@@ -100,7 +113,7 @@ var funs = {
   alarm__deps: ['_sigalrm_handler'],
   alarm: function(seconds) {
     setTimeout(function() {
-      if (__sigalrm_handler) Runtime.dynCall('vi', __sigalrm_handler, [0]);
+      if (__sigalrm_handler) {{{ makeDynCall('vi', '__sigalrm_handler') }}}(0);
     }, seconds*1000);
   },
   ualarm: function() {
@@ -113,17 +126,34 @@ var funs = {
     throw 'getitimer() is not implemented yet';
   },
 
-  pause__deps: ['__setErrNo', '$ERRNO_CODES'],
+  pause__deps: ['$setErrNo', '$ERRNO_CODES'],
   pause: function() {
     // int pause(void);
     // http://pubs.opengroup.org/onlinepubs/000095399/functions/pause.html
     // We don't support signals, so we return immediately.
 #if ASSERTIONS
-    Module.printErr('Calling stub instead of pause()');
+    err('Calling stub instead of pause()');
 #endif
-    ___setErrNo(ERRNO_CODES.EINTR);
+    setErrNo(ERRNO_CODES.EINTR);
     return -1;
   },
+#if SUPPORT_LONGJMP
+#if ASSERTIONS
+  siglongjmp__deps: ['longjmp'],
+  siglongjmp: function(env, value) {
+    // We cannot wrap the sigsetjmp, but I hope that
+    // in most cases siglongjmp will be called later.
+
+    // siglongjmp can be called very many times, so don't flood the stderr.
+    warnOnce("Calling longjmp() instead of siglongjmp()");
+    _longjmp(env, value);
+  },
+#else
+  siglongjmp__sig: 'vii',
+  siglongjmp: 'longjmp',
+#endif
+#endif
+
   sigpending: function(set) {
     {{{ makeSetValue('set', 0, 0, 'i32') }}};
     return 0;
@@ -138,7 +168,6 @@ var funs = {
   //sigsetmask
   //siggetmask
   //sigsuspend
-  //bsd_signal
   //siginterrupt
   //sigqueue
   //sysv_signal

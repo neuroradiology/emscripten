@@ -1,3 +1,8 @@
+// Copyright 2012 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
 #include <stdio.h>
 #include <assert.h>
 #include <emscripten.h>
@@ -12,7 +17,7 @@ struct Info {
 int w1;
 
 Info x[3] = { {    22,      3.159,  97, 2.1828 },
-              { 55123, 987612.563, 190, 0.0009 },
+              { 55123, 987612.563, static_cast<char>(190), 0.0009 },
               {  -102,    -12.532, -21, -51252 } };
 
 int stage = -1;
@@ -34,8 +39,7 @@ void c3(char *data, int size, void *arg) { // tests calls different in different
   }
   if (c3_7 && c3_7) { // note: racey, responses from 2 workers here
     emscripten_destroy_worker(w1);
-    int result = 11;
-    REPORT_RESULT();
+    REPORT_RESULT(11);
     emscripten_force_exit(0);
   }
 }

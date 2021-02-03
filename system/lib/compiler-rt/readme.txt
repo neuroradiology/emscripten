@@ -1,20 +1,17 @@
-These files are from compiler-rt,
+These files are from llvm-project/compiler-rt, release 10.0.0.
 
-Last Changed Rev: 179380
-Last Changed Date: 2013-04-12 07:57:03 -0700 (Fri, 12 Apr 2013)
+tag: llvmorg-10.0.0
+git: d32170dbd5b0d54436537b6b75beaf44324e0c28
 
-===========================================================================
+Not all files are included. The list of included files from lib/builtins/ is in
+filelist.txt.
 
-Changes:
+Update Instructions
+-------------------
 
-  * add emscripten endianness to int_endianness.h
-  * add rem functions
+Run `system/lib/update_compiler_rt.py path/to/llvm-root`
 
-===========================================================================
+Local Change
+------------
 
-Compile with something like
-
-./emcc system/lib/compiler-rt/*.c -Isystem/lib/compiler-rt/ -o rt.bc
-./emcc -O2 -s ASM_JS=1 -g rt.bc -s LINKABLE=1
-manually replace Math_imul with Math.imul
-
+lib/builtins/powitf2.c: enable for wasm as well as PPC

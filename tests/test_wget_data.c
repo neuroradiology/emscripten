@@ -1,3 +1,10 @@
+/*
+ * Copyright 2015 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
@@ -14,6 +21,7 @@ int main()
     printf("load %s\n", file);
     emscripten_wget_data(file, &buffer, &num, &error);
     assert(!error);
+    printf("buffer: %s\n", (char*)buffer);
     assert(strstr(buffer, "emscripten") == buffer); 
 
     printf("load non-existing\n");
@@ -21,7 +29,6 @@ int main()
     assert(error);
 
     printf("ok!\n");
-    int result = 1;
-    REPORT_RESULT();
+    REPORT_RESULT(1);
     return 0;
 }

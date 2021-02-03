@@ -1,3 +1,8 @@
+/**
+ * @license
+ * Copyright 2012 The Emscripten Authors
+ * SPDX-License-Identifier: MIT
+ */
 
 var LibraryXlib = {
   XOpenDisplay: function() {

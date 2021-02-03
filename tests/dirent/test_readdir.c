@@ -1,3 +1,10 @@
+/*
+ * Copyright 2013 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
@@ -36,7 +43,7 @@ void cleanup() {
 
 void test() {
   int err;
-  long loc;
+  long loc, loc2;
   DIR *dir;
   struct dirent *ent;
   struct dirent ent_r;
@@ -110,20 +117,28 @@ void test() {
   rewinddir(dir);
   ent = readdir(dir);
   assert(!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..") || !strcmp(ent->d_name, "file.txt"));
-  char first[1024];
-  //printf("first: %s\n", ent->d_name);
-  strcpy(first, ent->d_name);
   loc = telldir(dir);
   assert(loc >= 0);
+  //printf("loc=%d\n", loc);
+  loc2 = ent->d_off;
   ent = readdir(dir);
+  char name_at_loc[1024];
+  strcpy(name_at_loc, ent->d_name);
+  //printf("name_at_loc: %s\n", name_at_loc);
   assert(!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..") || !strcmp(ent->d_name, "file.txt"));
   ent = readdir(dir);
   assert(!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..") || !strcmp(ent->d_name, "file.txt"));
   seekdir(dir, loc);
   ent = readdir(dir);
   assert(ent);
-  //printf("check: %s / %s\n", ent->d_name, first);
-  assert(!strcmp(ent->d_name, first));
+  //printf("check: %s / %s\n", ent->d_name, name_at_loc);
+  assert(!strcmp(ent->d_name, name_at_loc));
+
+  seekdir(dir, loc2);
+  ent = readdir(dir);
+  assert(ent);
+  //printf("check: %s / %s\n", ent->d_name, name_at_loc);
+  assert(!strcmp(ent->d_name, name_at_loc));
 
   //
   // do a normal read with readdir_r
@@ -169,11 +184,14 @@ void test_scandir() {
 }
 
 int main() {
-  printf("SIGILL: %s\n", strsignal(SIGILL));
   atexit(cleanup);
   signal(SIGABRT, cleanup);
   setup();
   test();
   test_scandir();
+
+#ifdef REPORT_RESULT
+  REPORT_RESULT(0);
+#endif
   return EXIT_SUCCESS;
 }

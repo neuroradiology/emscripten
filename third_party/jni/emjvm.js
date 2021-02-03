@@ -58,8 +58,9 @@ mergeInto(LibraryManager.library, {
     var obj = EmJVM.objects[string];
     assert(obj.name == 'string');
     if (isCopy) setValue(isCopy, 'i8', 1);
-    var buffer = _malloc(obj.value.length+1);
-    writeStringToMemory(obj.value, buffer);
+    var len = lengthBytesUTF8(obj.value) + 1;
+    var buffer = _malloc(len);
+    stringToUTF8(obj.value, buffer, len);
     return buffer;
   },
 
@@ -86,11 +87,11 @@ mergeInto(LibraryManager.library, {
 
   emjvm_getMethodID: function(jclass, name, sig) {
     if (EmJVM.debug) {
-      console.log('EMJVM_GetMethodID: ' + [jclass, Pointer_stringify(name), Pointer_stringify(sig)]);
+      console.log('EMJVM_GetMethodID: ' + [jclass, UTF8ToString(name), UTF8ToString(sig)]);
       console.log('EMJVM_GetMethodID: ' + [EmJVM.objects[jclass].name]);
     }
     // assumes class <--> object, just called on singletons
-    name = Pointer_stringify(name);
+    name = UTF8ToString(name);
     var obj = EmJVM.objects[jclass];
     if (!obj[name]) {
       throw 'missing implementation for ' + obj.name + '::' + name + ' : ' + new Error().stack;
@@ -173,7 +174,7 @@ mergeInto(LibraryManager.library, {
   },
 
   emjvm_findClass: function(env, name) {
-    name = Pointer_stringify(name);
+    name = UTF8ToString(name);
     if (EmJVM.debug) {
       console.log('emjvm_findClass: ' + [name]);
     }

@@ -1,3 +1,10 @@
+/*
+ * Copyright 2014 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -46,6 +53,6 @@ int main() {
   RUN(unsigned short);
   printf("32\n");
   RUN(unsigned);
-  return 1;
+  return 0;
 }
 

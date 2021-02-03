@@ -4,6 +4,13 @@ Parent:42
 object
 object
 8
+8
+8
+6
+6
+9
+10
+10
 boolean
 true
 c1
@@ -62,6 +69,8 @@ object
 11
 21.12
 198
+getAsArray: 24
+Inner::+= => 2
 0
 1
 34,34
@@ -69,9 +78,9 @@ object
 return char 127
 char: 127
 char: -1
-return unsigned char -1
+return unsigned char 255
 unsigned char: 255
-return unsigned short -1
+return unsigned short 65535
 unsigned short int: 65535
 return unsigned long -1
 unsigned long int: 4294967295
@@ -96,9 +105,9 @@ struct_ptr_array[0]->attr2 == 101
 4 : 0.25
 9 : 0.01
 10 : -20.42
-Assertion failed: [CHECK FAILED] Parent::Parent(arg0:val): Expecting <integer>
 Parent:42
-Assertion failed: [CHECK FAILED] Parent::voidStar(arg0:something): Expecting <pointer>
-Assertion failed: [CHECK FAILED] StringUser::Print(arg1:anotherString): Expecting <string>
 
 done.
+Assertion failed: [CHECK FAILED] Parent::Parent(val:val): Expecting <integer>
+Assertion failed: [CHECK FAILED] Parent::voidStar(something:something): Expecting <pointer>
+Assertion failed: [CHECK FAILED] StringUser::Print(anotherString:anotherString): Expecting <string>

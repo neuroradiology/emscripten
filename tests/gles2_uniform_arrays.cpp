@@ -1,3 +1,8 @@
+// Copyright 2013 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
 #include "SDL/SDL_opengl.h"
 #include "SDL/SDL.h"
 
@@ -36,7 +41,7 @@ void RunTest(int testVariant)
     glBindAttribLocation(program, 0, "pos");
     glLinkProgram(program);
 
-    // Also test that GL_ACTIVE_ATTRIBUTE_MAX_LENGTH and GL_ACTIVE_UNIFORM_MAX_LENGTH work. See https://github.com/kripken/emscripten/issues/1796.
+    // Also test that GL_ACTIVE_ATTRIBUTE_MAX_LENGTH and GL_ACTIVE_UNIFORM_MAX_LENGTH work. See https://github.com/emscripten-core/emscripten/issues/1796.
     GLint param;
     glGetProgramiv(program, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &param);
     printf("active attrib max length: %d\n", param);
@@ -98,7 +103,7 @@ void RunTest(int testVariant)
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    int in_worker = EM_ASM_INT_V({
+    int in_worker = EM_ASM_INT({
       return typeof importScripts !== 'undefined'
     });
 
@@ -137,8 +142,7 @@ int main(int argc, char *argv[])
         RunTest(i);
 
 #ifdef REPORT_RESULT
-    int result = 1;
-    REPORT_RESULT();
+    REPORT_RESULT(1);
 #endif
 
     return 0;

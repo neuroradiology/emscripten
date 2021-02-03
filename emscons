@@ -1,20 +1,29 @@
-#!/usr/bin/env python2
+#!/bin/sh
+# Copyright 2020 The Emscripten Authors.  All rights reserved.
+# Emscripten is available under two separate licenses, the MIT license and the
+# University of Illinois/NCSA Open Source License.  Both these licenses can be
+# found in the LICENSE file.
+#
+# Entry point for running python scripts on UNIX systems.
+#
+# To modify this file, edit `tools/run_python.sh` and then run
+# `tools/create_entry_points.py`
 
-'''
-Wrapping the scons invocation, EMSCRIPTEN_TOOL_PATH is set in the process
-environment, and can be used to locate the emscripten SCons Tool.
-Example:
-# Load emscripten Tool
-my_env = Environment(tools=['emscripten'], toolpath=[os.environ['EMSCRIPTEN_TOOL_PATH']])
-'''
+if [ -z "$PYTHON" ]; then
+  PYTHON=$EMSDK_PYTHON
+fi
 
-import os, subprocess, sys
-from tools import shared
+if [ -z "$PYTHON" ]; then
+  PYTHON=$(which python3 2> /dev/null)
+fi
 
-tool_path = os.path.join(shared.path_from_root('tools'), 'scons', 'site_scons', 'site_tools', 'emscripten')
+if [ -z "$PYTHON" ]; then
+  PYTHON=$(which python 2> /dev/null)
+fi
 
-env = os.environ.copy()
-env[ 'EMSCRIPTEN_TOOL_PATH' ] = tool_path
+if [ -z "$PYTHON" ]; then
+  echo 'unable to find python in $PATH'
+  exit 1
+fi
 
-exit(subprocess.call(sys.argv[1:], env=env))
-
+exec "$PYTHON" "$0.py" "$@"

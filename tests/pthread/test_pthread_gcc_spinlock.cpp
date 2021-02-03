@@ -1,3 +1,8 @@
+// Copyright 2015 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -45,8 +50,7 @@ int main()
 	if (!emscripten_has_threading_support())
 	{
 #ifdef REPORT_RESULT
-		result = 800;
-		REPORT_RESULT();
+		REPORT_RESULT(800);
 #endif
 		printf("Skipped: Threading is not supported.\n");
 		return 0;
@@ -56,13 +60,9 @@ int main()
 
 	for(int i = 0; i < NUM_THREADS; ++i)
 	{
-		pthread_attr_t attr;
-		pthread_attr_init(&attr);
-		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-		int rc = pthread_create(&thread[i], &attr, ThreadMain, 0);
+		int rc = pthread_create(&thread[i], NULL, ThreadMain, 0);
 		if (rc != 0 || thread[i] == 0)
 			printf("Failed to create thread!\n");
-		pthread_attr_destroy(&attr);
 	}
 
 	for(int i = 0; i < NUM_THREADS; ++i)
@@ -73,7 +73,6 @@ int main()
 
 	printf("counter: %d\n", counter);
 #ifdef REPORT_RESULT
-	result = counter;
-	REPORT_RESULT();
+	REPORT_RESULT(counter);
 #endif
 }

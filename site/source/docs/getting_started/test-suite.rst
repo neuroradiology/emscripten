@@ -4,51 +4,83 @@
 Emscripten Test Suite
 =====================
 
-Emscripten has a comprehensive test suite, which covers virtually all Emscripten functionality. These tests are an excellent resource for developers as they provide practical examples of most features, and are known to build successfully on the master branch. There are also :ref:`benchmark tests <emscripten-benchmark-tests>` that can be used to test how close Emscripten is getting to native speed.
+Emscripten has a comprehensive test suite, which covers virtually all Emscripten functionality. These tests are an excellent resource for developers as they provide practical examples of most features, and are known to pass on the master branch. In addition to correctness tests, there are also benchmarks that you can run.
 
 This article explains how to run the test and benchmark suite, and provides an overview of what tests are available.
 
-Running the whole test suite
-============================
+Setting up
+==========
 
-The whole core test suite can be run using the script `tests/runner.py <https://github.com/kripken/emscripten/blob/master/tests/runner.py>`_: 
+To run the tests, you need an emscripten setup, as it will run ``emcc`` and other
+commands. See the :ref:`developer's guide <developers-guide-setting-up>` for
+how best to do that.
+
+Running tests
+=============
+
+Run the test suite runner (`tests/runner.py <https://github.com/emscripten-core/emscripten/blob/master/tests/runner.py>`_) with no arguments to see the help message:
 
 .. code-block:: bash
 
     python tests/runner.py
-	
-.. note:: 
 
-	- The core test suite is not the entire test suite, see :ref:`section about core test modes <emscripten-test-suite-modes>`
-	- This may take several hours.
-	- :term:`Node.js` cannot run all of the tests in the suite; if you need to run them all, you should get a recent trunk version of the `SpiderMonkey <https://developer.mozilla.org/en-US/docs/Mozilla/Projects/SpiderMonkey/Introduction_to_the_JavaScript_shell>`_ shell. On Windows you can install and activate *SpiderMonkey* using the :ref:`emsdk`.
-
-Running specific tests
-======================
-
-You can also use *runner.py* to run different parts of the test suite, or individual tests. For example, you would run test named ``test_hello_world`` as shown:
+The tests are divided into *modes*. You can run either an entire mode or an individual test, or use wildcards to run some tests in some modes. For example:
 
 .. code-block:: bash
 
-    python tests/runner.py test_hello_world
-	
-Tests in the "core" test suite (``tests/test_core.py``) can be run as above. Other tests may need a prefix, for example ``browser.test_cubegeom`` for a test in ``tests/test_browser.py``. You can also specify an optional prefix for tests in core, to run them with extra options, for example ``asm2.test_hello_world`` will run ``hello_world`` using ``asm2`` opts (basically ``-O2``). See more examples in :ref:`emscripten-test-suite-list-of-tests`.
+  # run one test (in the default mode)
+  python tests/runner.py test_loop
 
-It is possible to pass a wildcard to match multiple tests by name. For example, the commands
+  # run one test in a specific mode (here, asm.js -O2)
+  python tests/runner.py asm2.test_loop
+
+  # run a test in a bunch of modes (here, all asm.js modes)
+  python tests/runner.py asm*.test_loop
+
+  # run a bunch of tests in one mode (here, all i64 tests in wasm -O3)
+  python tests/runner.py wasm3.test_*i64*
+
+  # run all tests in a specific mode (here, asm.js -O1)
+  python tests/runner.py asm1
+
+The *core* test modes (defined at the bottom of `tests/test_core.py <https://github.com/emscripten-core/emscripten/blob/master/tests/test_core.py>`_) let you run a specific test in either asm.js or wasm, and with different optimization flags. There are also non-core test modes, that run tests in more special manner (in particular, in those tests it is not possible to say "run the test with a different optimization flag" - that is what the core tests are for). The non-core test modes include
+
+ * `other`: Non-core tests running in the shell.
+ * `browser`: Tests that run in a browser.
+ * `sockets`: Networking tests that run in a browser.
+ * `interactive`: Browser tests that are not fully automated, and require user interaction (these should be automated eventually).
+ * `sanity`: Tests for emscripten setting itself up. This modifies your `.emscripten` file temporarily.
+ * `benchmark`: Runs benchmarks, measuring speed and code size.
+
+The wildcards we mentioned above work for non-core test modes too, for example:
 
 .. code-block:: bash
 
-    python tests/runner.py ALL.test_simd_* ALL.test_sse*
+  # run one browser test
+  python tests/runner.py browser.test_sdl_image
 
-would run all the SIMD related tests in the suite.
+  # run all SDL2 browser tests
+  python tests/runner.py browser.test_sdl2*
 
-Individual tests can be skipped, so
+  # run all browser tests
+  python tests/runner.py browser
+
+Skipping Tests
+==============
+
+An individual test can be skipped by passing the "skip:" prefix. E.g.
 
 .. code-block:: bash
 
-    python tests/runner.py browser.test_pthread_* skip:browser.test_pthread_gcc_atomic_fetch_and_op
+  python tests/runner.py other skip:other.test_cmake
 
-would run all the multithreading tests except the one test ``browser.test_pthread_gcc_atomic_fetch_and_op``.
+Wildcards can also be passed in skip, so
+
+.. code-block:: bash
+
+  python tests/runner.py browser skip:browser.test_pthread_*
+
+will run the whole browser suite except for all the pthread tests in it.
 
 Running a bunch of random tests
 ===============================
@@ -61,123 +93,98 @@ You can run a random subset of the test suite, using something like
 
 Replace ``100`` with another number as you prefer. This will run that number of random tests, and tell you the statistical likelihood of almost all the test suite passing assuming those tests do. This works just like election surveys do - given a small sample, we can predict fairly well that so-and-so percent of the public will vote for candidate A. In our case, the "candidates" are pass or fail, and we can predict how much of the test suite will pass given that sample. Assuming the sample tests all pass, we can say with high likelihood that most of the test suite will in fact pass. (Of course, this is no guarantee, and even a single test failure is serious, however, this gives a quick estimate that your patch does not cause significant and obvious breakage.)
 
-Core test modes
+Important Tests
 ===============
 
-By default, calling the test runner without arguments will run the core test suite
+Please see the bottom the file `tests/test_core.py <https://github.com/emscripten-core/emscripten/blob/master/tests/test_core.py>`_ for the current test modes, as they may change slowly over time.
+When you want to run the entire test suite locally, these are currently the important commands:
 
 .. code-block:: bash
 
-    python tests/runner.py
+  # Run all core wasm tests
+  python tests/runner.py wasm*
 
-The core test suite includes ``default`` (no optimizations), ``asm1`` (``-O1`` optimizations), and a bunch of other optimization and compiler flags, each of which is a different "mode". The core test suite is the bulk of the entire test suite, and it runs each test in each of those modes.
+  # Run "other" test suite
+  python tests/runner.py other
 
-You can also run a specific mode or test in a mode, or a specific test across all modes:
+  # Run "browser" test suite - this requires a web browser
+  python tests/runner.py browser
 
-.. code-block:: bash
+  # Run "sockets" test suite - this requires a web browser too
+  python tests/runner.py sockets
 
-	# Run all tests in asm1 mode	(-O1 optimizations).
-	python tests/runner.py asm1
+  # Run "sanity" test suite - this tests setting up emscripten during
+  # first run, etc., and so it modifies your .emscripten file temporarily.
+  python tests/runner.py sanity
 
-	# Run one test in asm1 mode	(-O1 optimizations).
-	python tests/runner.py asm1.test_hello_world   
-	
-	# Run one test in all modes.
-	python tests/runner.py ALL.test_hello_world 
+  # Optionally, also run benchmarks to check for regressions
+  python tests/runner.py benchmark
 
-The core test modes are documented at the end of `/tests/test_core.py <https://github.com/kripken/emscripten/blob/1.29.12/tests/test_core.py#L7421>`_.
+.. _benchmarking:
 
-.. _emscripten-test-suite-modes:
-
-The core tests are the bulk of the entire test suite, in both number and time to run. To speed them up, you can run them in parallel using `/tests/parallel_test_core.py <https://github.com/kripken/emscripten/blob/master/tests/parallel_test_core.py>`_. That runs the test modes using a python process pool, emitting their outputs and stderrs to ``*.out, *.err`` for each mode.
-
-
-Non-core test modes
-===================
-
-The main non-core test modes are ``other, browser, sockets, interactive, sanity``. See :ref:`emscripten-test-suite-list-of-tests` for how to run them.
-
-
-.. _emscripten-benchmark-tests:
-
-Benchmark tests
-===============
-
-You can view `Emscripten’s current benchmark test results <http://arewefastyet.com/#machine=11&view=breakdown&suite=asmjs-ubench>`_ online. These are created by compiling a sequence of benchmarks and running them several times, then reporting averaged statistics including a comparison of how fast the same code runs when compiled to a native executable.
-
-You can run the tests yourself using the following command:
-
-.. code-block:: bash
-
-    python tests/runner.py benchmark
-
-	
-.. _emscripten-test-suite-list-of-tests:
-
-Common tests
+Benchmarking
 ============
 
-Below is a list of some common tests/example commands. These include a comment explaining what each test does.
+Emscripten has a benchmark suite that measures both speed and code size, which
+includes several interesting real-world codebases, from physics engines to
+compression libraries to virtual machines. It also includes some existing
+benchmarks such as CoreMark and LINPACK. See for example
+`this post's section on speed <https://kripken.github.io/blog/wasm/2020/07/27/wasmboxc.html>`_
+which gives an overview.
+
+To run the benchmark suite, do:
 
 .. code-block:: bash
 
-	# Run all (core) tests
-	python tests/runner.py                          
+  # Run all benchmarks
+  python tests/runner.py benchmark
 
-	# Run hello world test, in default mode
-	python tests/runner.py test_hello_world
+As with all the test suites, you can also run a specific benchmark:
 
-	# Run it in asm1 mode
-	python tests/runner.py asm1.test_hello_world   
-	
-	# Run it in all modes
-	python tests/runner.py ALL.test_hello_world 
+.. code-block:: bash
 
-	# Run all (core) tests in asm1 mode	
-	python tests/runner.py asm1 
+  # Run one specific benchmark
+  python tests/runner.py benchmark.test_skinning
 
-	# Run all "other" tests - that have no mode	
-	python tests/runner.py other
+Usually you will want to customize the python in `tests/test_benchmark.py` to
+run the benchmarks you want (there is currently no external config file). Things
+you may want to modify include:
 
-	# Run a specific test in "other"	
-	python tests/runner.py other.test_static_link 
-
-	# Run all browser tests	
-	python tests/runner.py browser
-	
-	# Run a specific browser test	
-	python tests/runner.py browser.test_sdlglshader 
-	
-	# Run all network tests. Note that you can also run specific tests (sockets.test_*)
-	python tests/runner.py sockets
-
-	# Run all sanity tests. Note that you can also run specific tests (sanity.test_*)	
-	python tests/runner.py sanity
-
-	# Run all benchmarks. Note that you can also run specific tests (benchmark.test_*)	
-	python tests/runner.py benchmark                
-
+* ``benchmarkers`` is the list of VMs to run the benchmarks on.
+* ``DEFAULT_ARG`` is how long the benchmark should run (they all try to run for
+  a similar amount of time for consistency).
+* ``TEST_REPS`` is how many times to repeat each run (more will take longer, but
+  should have less noise).
+* ``PROFILING`` controls whether the builds are set up for profiling (which can
+  increase code size, so it's not done by default).
 
 Debugging test failures
 =======================
 
-Setting the :ref:`debugging-EMCC_DEBUG` is useful for debugging tests, as it emits debug output and intermediate files from the compilation process:
+Setting the :ref:`debugging-EMCC_DEBUG` is useful for debugging tests, as it emits debug output and intermediate files (the files go in **/tmp/emscripten_temp/**):
 
 .. code-block:: bash
 
-	# On Windows, use "set" to set and un-set the EMCC_DEBUG environment variable:
-	set EMCC_DEBUG=1 
-	python tests/runner.py test_hello_world
-	set EMCC_DEBUG=0
-	
-	# On Linux, you can do this all in one line
-	EMCC_DEBUG=1 python tests/runner.py test_hello_world
-	
-	# EMCC_DEBUG=2 generates additional debug information.
-	EMCC_DEBUG=2 python tests/runner.py test_hello_world
+  # On Windows, use "set" to set and un-set the EMCC_DEBUG environment variable:
+  set EMCC_DEBUG=1
+  python tests/runner.py test_hello_world
+  set EMCC_DEBUG=0
+
+  # On Linux, you can do this all in one line
+  EMCC_DEBUG=1 python tests/runner.py test_hello_world
+
+  # EMCC_DEBUG=2 generates additional debug information.
+  EMCC_DEBUG=2 python tests/runner.py test_hello_world
 
 
-You can also specify ``EM_SAVE_DIR=1`` in the environment to save the temporary directory that the test runner uses into **/tmp/emscripten_temp/**. This is a test suite-specific feature, and is useful for tests that create temporary files.
+You can also specify ``EMTEST_SAVE_DIR=1`` in the environment to save the
+temporary directory that the test runner uses into **/tmp/emscripten_test/**.
+This is a test suite-specific feature, and is useful for inspecting test
+outputs as well as temporary files generated by the test.  By default,
+the temporary directory will be cleaned between each test run, but setting
+``EMTEST_SAVE_DIR=2`` will preserve the directory even when a new test is
+started.
 
-The :ref:`Debugging` topic provides more guidance on how to debug Emscripten-generated code. 
+
+The :ref:`Debugging` topic provides more guidance on how to debug Emscripten-generated code.
 

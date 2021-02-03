@@ -1,3 +1,9 @@
+/**
+ * @license
+ * Copyright 2015 The Emscripten Authors
+ * SPDX-License-Identifier: MIT
+ */
+
 {
   indexedDB: function() {
     if (typeof indexedDB !== 'undefined') return indexedDB;
@@ -38,13 +44,14 @@
       IDBStore.dbs[name] = db;
       callback(null, db);
     };
-    req.onerror = function(e) {
+    req.onerror = /** @this{IDBOpenDBRequest} */ function(e) {
       callback(this.error);
       e.preventDefault();
     };
   },
   getStore: function(dbName, type, callback) {
     IDBStore.getDB(dbName, function(error, db) {
+      if (error) return callback(error);
       var transaction = db.transaction([IDBStore.DB_STORE_NAME], type);
       transaction.onerror = function(e) {
         callback(this.error || 'unknown error');

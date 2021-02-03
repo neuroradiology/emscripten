@@ -1,3 +1,10 @@
+/*
+ * Copyright 2015 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
@@ -31,6 +38,7 @@ int main() {
     else {
       char buffer[8];
       fread(buffer, 1, 7, fd);
+      buffer[7] = 0;
       printf("buffer is %s\n", buffer);
       fclose(fd);
     }

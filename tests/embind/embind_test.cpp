@@ -1,3 +1,8 @@
+// Copyright 2012 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
 #include <string>
 #include <malloc.h>
 #include <functional>
@@ -37,6 +42,23 @@ val emval_test_new_object() {
     rv.set("foo", val("bar"));
     rv.set("baz", val(1));
     return rv;
+}
+
+struct DummyForPointer {
+    int value;
+    DummyForPointer(const int v) : value(v) {}
+};
+
+static DummyForPointer emval_pointer_dummy(42);
+
+val emval_test_instance_pointer() {
+    DummyForPointer* p = &emval_pointer_dummy;
+    return val(p);
+}
+
+int emval_test_value_from_instance_pointer(val v) {
+    DummyForPointer * p = v.as<DummyForPointer *>(allow_raw_pointers());
+    return p->value;
 }
 
 unsigned emval_test_passthrough_unsigned(unsigned v) {
@@ -103,13 +125,29 @@ unsigned emval_test_sum(val v) {
     return rv;
 }
 
-std::string get_non_ascii_string() {
-    char c[128 + 1];
-    c[128] = 0;
-    for (int i = 0; i < 128; ++i) {
-        c[i] = 128 + i;
+std::string get_non_ascii_string(bool embindStdStringUTF8Support) {
+    if(embindStdStringUTF8Support) {
+        //ASCII
+        std::string testString{"aei"};
+        //Latin-1 Supplement
+        testString += "\u00E1\u00E9\u00ED";
+        //Greek
+        testString += "\u03B1\u03B5\u03B9";
+        //Cyrillic
+        testString += "\u0416\u041B\u0424";
+        //CJK
+        testString += "\u5F9E\u7345\u5B50";
+        //Euro sign
+        testString += "\u20AC";
+        return testString;
+    } else {
+        char c[128 + 1];
+        c[128] = 0;
+        for (int i = 0; i < 128; ++i) {
+            c[i] = 128 + i;
+        }
+        return c;
     }
-    return c;
 }
 
 std::wstring get_non_ascii_wstring() {
@@ -121,13 +159,41 @@ std::wstring get_non_ascii_wstring() {
     return ws;
 }
 
+std::u16string get_non_ascii_u16string() {
+    std::u16string u16s(4, 0);
+    u16s[0] = 10;
+    u16s[1] = 1234;
+    u16s[2] = 2345;
+    u16s[3] = 65535;
+    return u16s;
+}
+
+std::u32string get_non_ascii_u32string() {
+    std::u32string u32s(5, 0);
+    u32s[0] = 10;
+    u32s[1] = 1234;
+    u32s[2] = 2345;
+    u32s[3] = 128513;
+    u32s[4] = 128640;
+    return u32s;
+}
+
 std::wstring get_literal_wstring() {
     return L"get_literal_wstring";
 }
 
+std::u16string get_literal_u16string() {
+    return u"get_literal_u16string";
+}
+
+std::u32string get_literal_u32string() {
+    return U"get_literal_u32string";
+}
+
 void force_memory_growth() {
-    auto heapu8 = val::global("Module")["HEAPU8"];
-    delete [] new char[heapu8["byteLength"].as<size_t>() + 1];
+    val module = val::global("Module");
+    std::size_t heap_size = module["HEAPU8"]["byteLength"].as<size_t>();
+    free(malloc(heap_size + 1));
 }
 
 std::string emval_test_take_and_return_const_char_star(const char* str) {
@@ -147,6 +213,14 @@ std::basic_string<unsigned char> emval_test_take_and_return_std_basic_string_uns
 }
 
 std::wstring take_and_return_std_wstring(std::wstring str) {
+    return str;
+}
+
+std::u16string take_and_return_std_u16string(std::u16string str) {
+    return str;
+}
+
+std::u32string take_and_return_std_u32string(std::u32string str) {
     return str;
 }
 
@@ -218,6 +292,14 @@ private:
 
 ValHolder emval_test_return_ValHolder() {
     return val::object();
+}
+
+val valholder_get_value_mixin(const ValHolder& target) {
+    return target.getVal();
+}
+
+void valholder_set_value_mixin(ValHolder& target, const val& value) {
+    target.setVal(value);
 }
 
 void emval_test_set_ValHolder_to_empty_object(ValHolder& vh) {
@@ -870,6 +952,18 @@ struct TupleInStruct {
 };
 
 TupleInStruct emval_test_take_and_return_TupleInStruct(TupleInStruct cs) {
+    return cs;
+}
+
+struct NestedStruct {
+    int x;
+    int y;
+};
+struct ArrayInStruct {
+    int field1[2];
+    NestedStruct field2[2];
+};
+ArrayInStruct emval_test_take_and_return_ArrayInStruct(ArrayInStruct cs) {
     return cs;
 }
 
@@ -1631,6 +1725,32 @@ unsigned long load_unsigned_long() {
 	return ulong;
 }
 
+template <int I>
+class ConstructFromFunctor {
+public:
+    ConstructFromFunctor(const val& v, int a)
+        : v_(v), a_(a)
+    {}
+
+    val getVal() const {
+        return v_;
+    }
+
+    int getA() const {
+        return a_;
+    }
+
+private:
+    val v_;
+    int a_;
+};
+
+template <int I>
+ConstructFromFunctor<I> construct_from_functor_mixin(const val& v, int i)
+{
+    return {v, i};
+}
+
 EMSCRIPTEN_BINDINGS(tests) {
     register_vector<int>("IntegerVector");
     register_vector<char>("CharVector");
@@ -1641,11 +1761,15 @@ EMSCRIPTEN_BINDINGS(tests) {
     register_vector<float>("FloatVector");
     register_vector<std::vector<int>>("IntegerVectorVector");
 
+    class_<DummyForPointer>("DummyForPointer");
+
     function("mallinfo", &emval_test_mallinfo);
     function("emval_test_new_integer", &emval_test_new_integer);
     function("emval_test_new_string", &emval_test_new_string);
     function("emval_test_get_string_from_val", &emval_test_get_string_from_val);
     function("emval_test_new_object", &emval_test_new_object);
+    function("emval_test_instance_pointer", &emval_test_instance_pointer);
+    function("emval_test_value_from_instance_pointer", &emval_test_value_from_instance_pointer);
     function("emval_test_passthrough_unsigned", &emval_test_passthrough_unsigned);
     function("emval_test_passthrough", &emval_test_passthrough);
     function("emval_test_return_void", &emval_test_return_void);
@@ -1674,6 +1798,12 @@ EMSCRIPTEN_BINDINGS(tests) {
     function("emval_test_take_and_return_std_string_const_ref", &emval_test_take_and_return_std_string_const_ref);
     function("emval_test_take_and_return_std_basic_string_unsigned_char", &emval_test_take_and_return_std_basic_string_unsigned_char);
     function("take_and_return_std_wstring", &take_and_return_std_wstring);
+    function("take_and_return_std_u16string", &take_and_return_std_u16string);
+    function("take_and_return_std_u32string", &take_and_return_std_u32string);
+    function("get_non_ascii_u16string", &get_non_ascii_u16string);
+    function("get_non_ascii_u32string", &get_non_ascii_u32string);
+    function("get_literal_u16string", &get_literal_u16string);
+    function("get_literal_u32string", &get_literal_u32string);
 
     //function("emval_test_take_and_return_CustomStruct", &emval_test_take_and_return_CustomStruct);
 
@@ -1681,7 +1811,7 @@ EMSCRIPTEN_BINDINGS(tests) {
         .element(&TupleVector::x)
         .element(&Vector::getY, &Vector::setY)
         .element(&readVectorZ, &writeVectorZ)
-        .element(index<3>())
+        .element(emscripten::index<3>())
         ;
 
     function("emval_test_return_TupleVector", &emval_test_return_TupleVector);
@@ -1697,7 +1827,7 @@ EMSCRIPTEN_BINDINGS(tests) {
         .field("x", &StructVector::x)
         .field("y", &Vector::getY, &Vector::setY)
         .field("z", &readVectorZ, &writeVectorZ)
-        .field("w", index<3>())
+        .field("w", emscripten::index<3>())
         ;
 
     function("emval_test_return_StructVector", &emval_test_return_StructVector);
@@ -1709,6 +1839,40 @@ EMSCRIPTEN_BINDINGS(tests) {
 
     function("emval_test_take_and_return_TupleInStruct", &emval_test_take_and_return_TupleInStruct);
 
+
+    value_array<std::array<int, 2>>("array_int_2")
+        .element(emscripten::index<0>())
+        .element(emscripten::index<1>())
+        ;
+    value_array<std::array<NestedStruct, 2>>("array_NestedStruct_2")
+        .element(emscripten::index<0>())
+        .element(emscripten::index<1>())
+        ;
+    value_object<NestedStruct>("NestedStruct")
+        .field("x", &NestedStruct::x)
+        .field("y", &NestedStruct::y)
+        ;
+
+    value_object<ArrayInStruct>("ArrayInStruct")
+        .field("field1", &ArrayInStruct::field1)
+        .field("field2", &ArrayInStruct::field2)
+        ;
+    function("emval_test_take_and_return_ArrayInStruct", &emval_test_take_and_return_ArrayInStruct);
+
+    using namespace std::placeholders;
+
+    class_<ConstructFromFunctor<1>>("ConstructFromStdFunction")
+        .constructor(std::function<ConstructFromFunctor<1>(const val&, int)>(&construct_from_functor_mixin<1>))
+        .function("getVal", &ConstructFromFunctor<1>::getVal)
+        .function("getA", &ConstructFromFunctor<1>::getA)
+        ;
+
+    class_<ConstructFromFunctor<2>>("ConstructFromFunctionObject")
+        .constructor<ConstructFromFunctor<2>(const val&, int)>(std::bind(&construct_from_functor_mixin<2>, _1, _2))
+        .function("getVal", &ConstructFromFunctor<2>::getVal)
+        .function("getA", &ConstructFromFunctor<2>::getA)
+        ;
+
     class_<ValHolder>("ValHolder")
         .smart_ptr<std::shared_ptr<ValHolder>>("std::shared_ptr<ValHolder>")
         .constructor<val>()
@@ -1717,8 +1881,18 @@ EMSCRIPTEN_BINDINGS(tests) {
         .function("getConstVal", &ValHolder::getConstVal)
         .function("getValConstRef", &ValHolder::getValConstRef)
         .function("setVal", &ValHolder::setVal)
+        .function("getValFunction", std::function<val(const ValHolder&)>(&valholder_get_value_mixin))
+        .function("setValFunction", std::function<void(ValHolder&, const val&)>(&valholder_set_value_mixin))
+        .function<val(const ValHolder&)>("getValFunctor", std::bind(&valholder_get_value_mixin, _1))
+        .function<void(ValHolder&, const val&)>("setValFunctor", std::bind(&valholder_set_value_mixin, _1, _2))
         .property("val", &ValHolder::getVal, &ValHolder::setVal)
         .property("val_readonly", &ValHolder::getVal)
+        .property("readonly_function_val", std::function<val(const ValHolder&)>(&valholder_get_value_mixin))
+        .property("function_val", std::function<val(const ValHolder&)>(&valholder_get_value_mixin),
+                                  std::function<void(ValHolder&, const val&)>(&valholder_set_value_mixin))
+        .property<val>("readonly_functor_val", std::bind(&valholder_get_value_mixin, _1))
+        .property<val>("functor_val", std::bind(&valholder_get_value_mixin, _1),
+                                      std::bind(&valholder_set_value_mixin, _1, _2))
         .class_function("makeConst", &ValHolder::makeConst, allow_raw_pointer<ret_val>())
         .class_function("makeValHolder", &ValHolder::makeValHolder)
         .class_function("some_class_method", &ValHolder::some_class_method)
@@ -2262,6 +2436,36 @@ struct ConstAndNonConst {
     }
 };
 
+class DummyForOverloads {};
+
+class MultipleOverloadsDependingOnDummy {
+public:
+    DummyForOverloads dummy() {
+        return DummyForOverloads();
+    }
+
+    DummyForOverloads dummy(DummyForOverloads d) {
+        return d;
+    }
+
+    static DummyForOverloads staticDummy() {
+        return DummyForOverloads();
+    }
+
+    static DummyForOverloads staticDummy(DummyForOverloads d) {
+        return d;
+    }
+
+};
+
+DummyForOverloads getDummy() {
+    return DummyForOverloads();
+}
+
+DummyForOverloads getDummy(DummyForOverloads d) {
+    return d;
+}
+
 EMSCRIPTEN_BINDINGS(overloads) {
     function("overloaded_function", select_overload<int(int)>(&overloaded_function));
     function("overloaded_function", select_overload<int(int, int)>(&overloaded_function));
@@ -2305,6 +2509,19 @@ EMSCRIPTEN_BINDINGS(overloads) {
     class_<ConstAndNonConst>("ConstAndNonConst")
         .function("method", select_const(&ConstAndNonConst::method))
         ;
+
+    class_<DummyForOverloads>("DummyForOverloads").constructor();
+
+    class_<MultipleOverloadsDependingOnDummy>("MultipleOverloadsDependingOnDummy")
+        .constructor()
+        .function("dummy", select_overload<DummyForOverloads()>(&MultipleOverloadsDependingOnDummy::dummy))
+        .function("dummy", select_overload<DummyForOverloads(DummyForOverloads)>(&MultipleOverloadsDependingOnDummy::dummy))
+        .class_function("staticDummy", select_overload<DummyForOverloads()>(&MultipleOverloadsDependingOnDummy::staticDummy))
+        .class_function("staticDummy", select_overload<DummyForOverloads(DummyForOverloads)>(&MultipleOverloadsDependingOnDummy::staticDummy))
+        ;
+
+    function("getDummy", select_overload<DummyForOverloads(void)>(&getDummy));
+    function("getDummy", select_overload<DummyForOverloads(DummyForOverloads)>(&getDummy));
 }
 
 // tests for out-of-order registration
@@ -2609,10 +2826,21 @@ val construct_with_ints_and_float(val factory) {
     return factory.new_(65537, 4.0f, 65538);
 }
 
+val construct_with_arguments_before_and_after_memory_growth() {
+    auto out = val::array();
+    out.set(0, val::global("Uint8Array").new_(5));
+    force_memory_growth();
+    out.set(1, val::global("Uint8Array").new_(5));
+    return out;
+}
+
 EMSCRIPTEN_BINDINGS(val_new_) {
     function("construct_with_6_arguments", &construct_with_6);
     function("construct_with_memory_view", &construct_with_memory_view);
     function("construct_with_ints_and_float", &construct_with_ints_and_float);
+    function(
+            "construct_with_arguments_before_and_after_memory_growth",
+            &construct_with_arguments_before_and_after_memory_growth);
 }
 
 template <typename T>
@@ -2708,7 +2936,7 @@ private:
     }
 
     void release(T* px) {
-        if (--px->referenceCount == 0) {
+        if (px && --px->referenceCount == 0) {
             delete px;
         }
     }
@@ -2785,10 +3013,10 @@ EMSCRIPTEN_BINDINGS(intrusive_pointers) {
 }
 
 std::string getTypeOfVal(const val& v) {
-    return v.typeof().as<std::string>();
+    return v.typeOf().as<std::string>();
 }
 
-EMSCRIPTEN_BINDINGS(typeof) {
+EMSCRIPTEN_BINDINGS(typeOf) {
     function("getTypeOfVal", &getTypeOfVal);
 }
 

@@ -601,7 +601,12 @@ gears_idle(void)
 {
    static int frames = 0;
    static double tRot0 = -1.0, tRate0 = -1.0;
-   double dt, t = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
+   double dt;
+#if ANIMATE
+   double t = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
+#else
+   double t = 0;
+#endif
 
    if (tRot0 < 0.0)
       tRot0 = t;
@@ -634,14 +639,14 @@ gears_idle(void)
       tRate0 = t;
       frames = 0;
 #ifdef LONGTEST
-      static runs = 0;
+      static int runs = 0;
       runs++;
       if (runs == 4) {
         int result = fps;
 #ifdef TEST_MEMORYPROFILER_ALLOCATIONS_MAP
         result = 0;
 #endif
-        REPORT_RESULT();
+        REPORT_RESULT(result);
       }
 #endif
    }

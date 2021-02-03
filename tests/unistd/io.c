@@ -1,8 +1,16 @@
+/*
+ * Copyright 2011 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/uio.h>
 #include <emscripten.h>
 
 int main() {
@@ -33,7 +41,7 @@ int main() {
       },
       write: function(stream, buffer, offset, length, pos) {
         for (var i = 0; i < length; i++) {
-          Module.print('TO DEVICE: ' + buffer[offset+i]);
+          out('TO DEVICE: ' + buffer[offset+i]);
         }
         return i;
       }
@@ -64,28 +72,28 @@ int main() {
   char writeBuffer[] = "writeme";
 
   int fl = open("/working/folder", O_RDWR);
-  printf("read from folder: %d\n", read(fl, readBuffer, sizeof readBuffer));
+  printf("read from folder: %zd\n", read(fl, readBuffer, sizeof readBuffer));
   printf("errno: %d\n", errno);
   errno = 0;
-  printf("write to folder: %d\n", write(fl, writeBuffer, sizeof writeBuffer));
+  printf("write to folder: %zd\n", write(fl, writeBuffer, sizeof writeBuffer));
   printf("errno: %d\n\n", errno);
   errno = 0;
 
   int bd = open("/broken-device", O_RDWR);
-  printf("read from broken device: %d\n", read(bd, readBuffer, sizeof readBuffer));
+  printf("read from broken device: %zd\n", read(bd, readBuffer, sizeof readBuffer));
   printf("errno: %d\n", errno);
   errno = 0;
-  printf("write to broken device: %d\n", write(bd, writeBuffer, sizeof writeBuffer));
+  printf("write to broken device: %zd\n", write(bd, writeBuffer, sizeof writeBuffer));
   printf("errno: %d\n\n", errno);
   errno = 0;
 
   int d = open("/device", O_RDWR);
-  printf("read from device: %d\n", read(d, readBuffer, sizeof readBuffer));
+  printf("read from device: %zd\n", read(d, readBuffer, sizeof readBuffer));
   printf("data: %s\n", readBuffer);
   memset(readBuffer, 0, sizeof readBuffer);
   printf("errno: %d\n", errno);
   errno = 0;
-  printf("write to device: %d\n", write(d, writeBuffer, sizeof writeBuffer));
+  printf("write to device: %zd\n", write(d, writeBuffer, sizeof writeBuffer));
   printf("errno: %d\n\n", errno);
   errno = 0;
 
@@ -103,66 +111,76 @@ int main() {
   errno = 0;
 
   int f = open("/working/file", O_RDWR);
-  printf("read from file: %d\n", read(f, readBuffer, sizeof readBuffer));
+  printf("read from file: %zd\n", read(f, readBuffer, sizeof readBuffer));
   printf("data: %s\n", readBuffer);
   memset(readBuffer, 0, sizeof readBuffer);
   printf("errno: %d\n\n", errno);
   errno = 0;
 
-  printf("pread past end of file: %d\n", pread(f, readBuffer, sizeof readBuffer, 999999999));
+  printf("pread past end of file: %zd\n", pread(f, readBuffer, sizeof readBuffer, 999999999));
   printf("data: %s\n", readBuffer);
   memset(readBuffer, 0, sizeof readBuffer);
   printf("errno: %d\n\n", errno);
   errno = 0;
 
-  printf("seek: %d\n", lseek(f, 3, SEEK_SET));
+  printf("seek: %lld\n", lseek(f, 3, SEEK_SET));
   printf("errno: %d\n\n", errno);
-  printf("partial read from file: %d\n", read(f, readBuffer, 3));
+  printf("partial read from file: %zd\n", read(f, readBuffer, 3));
   printf("data: %s\n", readBuffer);
   memset(readBuffer, 0, sizeof readBuffer);
   printf("errno: %d\n\n", errno);
   errno = 0;
 
-  printf("seek: %d\n", lseek(f, -2, SEEK_END));
+  printf("seek: %lld\n", lseek(f, -2, SEEK_END));
   printf("errno: %d\n", errno);
   errno = 0;
-  printf("partial read from end of file: %d\n", read(f, readBuffer, 3));
+  printf("partial read from end of file: %zd\n", read(f, readBuffer, 3));
   printf("data: %s\n", readBuffer);
   memset(readBuffer, 0, sizeof readBuffer);
   printf("errno: %d\n\n", errno);
   errno = 0;
 
-  printf("seek: %d\n", lseek(f, -15, SEEK_CUR));
+  printf("seek: %lld\n", lseek(f, -15, SEEK_CUR));
   printf("errno: %d\n", errno);
   errno = 0;
-  printf("partial read from before start of file: %d\n", read(f, readBuffer, 3));
+  printf("partial read from before start of file: %zd\n", read(f, readBuffer, 3));
   printf("data: %s\n", readBuffer);
   memset(readBuffer, 0, sizeof readBuffer);
   printf("errno: %d\n\n", errno);
   errno = 0;
 
-  printf("seek: %d\n", lseek(f, 0, SEEK_SET));
-  printf("write to start of file: %d\n", write(f, writeBuffer, 3));
+  printf("seek: %lld\n", lseek(f, 0, SEEK_SET));
+  printf("write to start of file: %zd\n", write(f, writeBuffer, 3));
   printf("errno: %d\n\n", errno);
   errno = 0;
 
-  printf("seek: %d\n", lseek(f, 0, SEEK_END));
-  printf("write to end of file: %d\n", write(f, writeBuffer, 3));
+  printf("seek: %lld\n", lseek(f, 0, SEEK_END));
+  printf("write to end of file: %zd\n", write(f, writeBuffer, 3));
   printf("errno: %d\n\n", errno);
   errno = 0;
 
-  printf("seek: %d\n", lseek(f, 10, SEEK_END));
-  printf("write after end of file: %d\n", write(f, writeBuffer, sizeof writeBuffer));
+  printf("seek: %lld\n", lseek(f, 10, SEEK_END));
+  printf("write after end of file: %zd\n", write(f, writeBuffer, sizeof writeBuffer));
   printf("errno: %d\n\n", errno);
   errno = 0;
 
-  int bytesRead;
-  printf("seek: %d\n", lseek(f, 0, SEEK_SET));
-  printf("read after write: %d\n", bytesRead = read(f, readBuffer, sizeof readBuffer));
+  printf("pwrite to the middle of file: %zd\n", pwrite(f, writeBuffer + 2, 3, 17));
+  printf("errno: %d\n", errno);
+  printf("seek: %lld\n\n", lseek(f, 0, SEEK_CUR));
+  errno = 0;
+
+  printf("pwrite past end of file: %zd\n", pwrite(f, writeBuffer, 5, 32));
+  printf("errno: %d\n", errno);
+  printf("seek: %lld\n\n", lseek(f, 0, SEEK_CUR));
+  errno = 0;
+
+  ssize_t bytesRead;
+  printf("seek: %lld\n", lseek(f, 0, SEEK_SET));
+  printf("read after write: %zd\n", bytesRead = read(f, readBuffer, sizeof readBuffer));
   printf("errno: %d\n", errno);
   errno = 0;
   printf("final: ");
-  for (int i = 0; i < bytesRead; i++) {
+  for (ssize_t i = 0; i < bytesRead; i++) {
     if (readBuffer[i] == 0) {
       printf("\\0");
     } else {
@@ -170,6 +188,30 @@ int main() {
     }
   }
   printf("\n");
+
+  // readv
+  printf("\n");
+  memset(readBuffer, 0, sizeof readBuffer);
+  struct iovec iov;
+  iov.iov_base = readBuffer;
+  iov.iov_len = sizeof readBuffer;
+  printf("seek: %lld\n", lseek(f, 0, SEEK_SET));
+  printf("read after write: %zd\n", bytesRead = readv(f, &iov, 1));
+  printf("errno: %d\n", errno);
+  errno = 0;
+  printf("final: ");
+  for (ssize_t i = 0; i < bytesRead; i++) {
+    if (readBuffer[i] == 0) {
+      printf("\\0");
+    } else {
+      printf("%c", readBuffer[i]);
+    }
+  }
+  printf("\n");
+
+#ifdef REPORT_RESULT
+  REPORT_RESULT(0);
+#endif
 
   return 0;
 }

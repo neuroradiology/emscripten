@@ -1,3 +1,10 @@
+/*
+ * Copyright 2013 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include "SDL/SDL.h"
 #include "SDL/SDL_image.h"
 #include "SDL/SDL_opengl.h"
@@ -7,8 +14,7 @@
 #include <assert.h>
 
 #include <emscripten.h>
-
-int result = 1;
+#include <emscripten/html5.h>
 
 int main(int argc, char *argv[])
 {
@@ -24,20 +30,20 @@ int main(int argc, char *argv[])
     screen = SDL_SetVideoMode( 0, 0, 16, SDL_OPENGL ); // *changed*
 
     // Test 2: Check that getting current canvas size works.
-    int w, h, fs;
-    emscripten_get_canvas_size(&w, &h, &fs);
+    int w, h;
+    emscripten_get_canvas_element_size("#canvas", &w, &h);
     printf("w:%d,h:%d\n", w,h);
     assert(w == 700);
     assert(h == 200);
 
     // Test 3: Check that resizing the canvas works as well.
-    emscripten_set_canvas_size(640, 480);
-    emscripten_get_canvas_size(&w, &h, &fs);
+    emscripten_set_canvas_element_size("#canvas", 640, 480);
+    emscripten_get_canvas_element_size("#canvas", &w, &h);
     printf("w:%d,h:%d\n", w,h);
     assert(w == 640);
     assert(h == 480);
 
     SDL_Quit();
-    REPORT_RESULT();
+    REPORT_RESULT(1);
     return 0;
 }

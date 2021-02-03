@@ -1,3 +1,8 @@
+// Copyright 2015 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
 #include <SDL/SDL.h>
 #include <SDL/SDL_audio.h>
 #include <queue>
@@ -177,8 +182,7 @@ void nextTest(void *unused = 0) {
 #ifdef __EMSCRIPTEN__
         emscripten_cancel_main_loop();
 #ifdef REPORT_RESULT
-        int result = 1;
-        REPORT_RESULT();
+        REPORT_RESULT(1);
 #endif
 #endif
         return;
@@ -195,7 +199,11 @@ void nextTest(void *unused = 0) {
     return;
   }
 
+#ifndef __wasm__
   emscripten_sleep_with_yield(100);
+#else
+  emscripten_sleep(100);
+#endif
 
   printf("Playing back a beep for %d msecs at %d Hz tone with audio format %s, %d channels, and %d samples/sec.\n",
       tone_duration, (int)Hz, SdlAudioFormatToString(sdlAudioFormats[s]), channels[c], freqs[f]);
@@ -204,7 +212,7 @@ void nextTest(void *unused = 0) {
 
 void update() {
   SDL_LockAudio();
-  int size = beep->beeps.size();
+  int size = beep ? beep->beeps.size() : 0;
   SDL_UnlockAudio();
   if (size == 0 && beep) {
     delete beep;

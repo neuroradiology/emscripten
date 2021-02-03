@@ -1,18 +1,55 @@
+/**
+ * @license
+ * Copyright 2013 The Emscripten Authors
+ * SPDX-License-Identifier: MIT
+ */
+
 mergeInto(LibraryManager.library, {
-  $NODEFS__deps: ['$FS', '$PATH'],
+  $NODEFS__deps: ['$FS', '$PATH', '$ERRNO_CODES', '$mmapAlloc'],
   $NODEFS__postset: 'if (ENVIRONMENT_IS_NODE) { var fs = require("fs"); var NODEJS_PATH = require("path"); NODEFS.staticInit(); }',
   $NODEFS: {
     isWindows: false,
     staticInit: function() {
       NODEFS.isWindows = !!process.platform.match(/^win/);
+      var flags = process["binding"]("constants");
+      // Node.js 4 compatibility: it has no namespaces for constants
+      if (flags["fs"]) {
+        flags = flags["fs"];
+      }
+      NODEFS.flagsForNodeMap = {
+        "{{{ cDefine('O_APPEND') }}}": flags["O_APPEND"],
+        "{{{ cDefine('O_CREAT') }}}": flags["O_CREAT"],
+        "{{{ cDefine('O_EXCL') }}}": flags["O_EXCL"],
+        "{{{ cDefine('O_NOCTTY') }}}": flags["O_NOCTTY"],
+        "{{{ cDefine('O_RDONLY') }}}": flags["O_RDONLY"],
+        "{{{ cDefine('O_RDWR') }}}": flags["O_RDWR"],
+        "{{{ cDefine('O_DSYNC') }}}": flags["O_SYNC"],
+        "{{{ cDefine('O_TRUNC') }}}": flags["O_TRUNC"],
+        "{{{ cDefine('O_WRONLY') }}}": flags["O_WRONLY"]
+      };
+    },
+    bufferFrom: function (arrayBuffer) {
+      // Node.js < 4.5 compatibility: Buffer.from does not support ArrayBuffer
+      // Buffer.from before 4.5 was just a method inherited from Uint8Array
+      // Buffer.alloc has been added with Buffer.from together, so check it instead
+      return Buffer["alloc"] ? Buffer.from(arrayBuffer) : new Buffer(arrayBuffer);
+    },
+    convertNodeCode: function(e) {
+      var code = e.code;
+#if ASSERTIONS
+      assert(code in ERRNO_CODES);
+#endif
+      return ERRNO_CODES[code];
     },
     mount: function (mount) {
+#if ASSERTIONS
       assert(ENVIRONMENT_IS_NODE);
+#endif
       return NODEFS.createNode(null, '/', NODEFS.getMode(mount.opts.root), 0);
     },
     createNode: function (parent, name, mode, dev) {
       if (!FS.isDir(mode) && !FS.isFile(mode) && !FS.isLink(mode)) {
-        throw new FS.ErrnoError(ERRNO_CODES.EINVAL);
+        throw new FS.ErrnoError({{{ cDefine('EINVAL') }}});
       }
       var node = FS.createNode(parent, name, mode);
       node.node_ops = NODEFS.node_ops;
@@ -24,13 +61,13 @@ mergeInto(LibraryManager.library, {
       try {
         stat = fs.lstatSync(path);
         if (NODEFS.isWindows) {
-          // On Windows, directories return permission bits 'rw-rw-rw-', even though they have 'rwxrwxrwx', so
-          // propagate write bits to execute bits.
-          stat.mode = stat.mode | ((stat.mode & 146) >> 1);
+          // Node.js on Windows never represents permission bit 'x', so
+          // propagate read bits to execute bits
+          stat.mode = stat.mode | ((stat.mode & 292) >> 2);
         }
       } catch (e) {
         if (!e.code) throw e;
-        throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+        throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
       }
       return stat.mode;
     },
@@ -46,39 +83,23 @@ mergeInto(LibraryManager.library, {
     },
     // This maps the integer permission modes from http://linux.die.net/man/3/open
     // to node.js-specific file open permission strings at http://nodejs.org/api/fs.html#fs_fs_open_path_flags_mode_callback
-    flagsToPermissionStringMap: {
-      0/*O_RDONLY*/: 'r',
-      1/*O_WRONLY*/: 'r+',
-      2/*O_RDWR*/: 'r+',
-      64/*O_CREAT*/: 'r',
-      65/*O_WRONLY|O_CREAT*/: 'r+',
-      66/*O_RDWR|O_CREAT*/: 'r+',
-      129/*O_WRONLY|O_EXCL*/: 'rx+',
-      193/*O_WRONLY|O_CREAT|O_EXCL*/: 'rx+',
-      514/*O_RDWR|O_TRUNC*/: 'w+',
-      577/*O_WRONLY|O_CREAT|O_TRUNC*/: 'w',
-      578/*O_CREAT|O_RDWR|O_TRUNC*/: 'w+',
-      705/*O_WRONLY|O_CREAT|O_EXCL|O_TRUNC*/: 'wx',
-      706/*O_RDWR|O_CREAT|O_EXCL|O_TRUNC*/: 'wx+',
-      1024/*O_APPEND*/: 'a',
-      1025/*O_WRONLY|O_APPEND*/: 'a',
-      1026/*O_RDWR|O_APPEND*/: 'a+',
-      1089/*O_WRONLY|O_CREAT|O_APPEND*/: 'a',
-      1090/*O_RDWR|O_CREAT|O_APPEND*/: 'a+',
-      1153/*O_WRONLY|O_EXCL|O_APPEND*/: 'ax',
-      1154/*O_RDWR|O_EXCL|O_APPEND*/: 'ax+',
-      1217/*O_WRONLY|O_CREAT|O_EXCL|O_APPEND*/: 'ax',
-      1218/*O_RDWR|O_CREAT|O_EXCL|O_APPEND*/: 'ax+',
-      4096/*O_RDONLY|O_DSYNC*/: 'rs',
-      4098/*O_RDWR|O_DSYNC*/: 'rs+'
-    },
-    flagsToPermissionString: function(flags) {
-      flags &= ~0100000 /*O_LARGEFILE*/; // Ignore this flag from musl, otherwise node.js fails to open the file.
-      flags &= ~02000000 /*O_CLOEXEC*/; // Some applications may pass it; it makes no sense for a single process.
-      if (flags in NODEFS.flagsToPermissionStringMap) {
-        return NODEFS.flagsToPermissionStringMap[flags];
+    flagsForNode: function(flags) {
+      flags &= ~0x200000 /*O_PATH*/; // Ignore this flag from musl, otherwise node.js fails to open the file.
+      flags &= ~0x800 /*O_NONBLOCK*/; // Ignore this flag from musl, otherwise node.js fails to open the file.
+      flags &= ~0x8000 /*O_LARGEFILE*/; // Ignore this flag from musl, otherwise node.js fails to open the file.
+      flags &= ~0x80000 /*O_CLOEXEC*/; // Some applications may pass it; it makes no sense for a single process.
+      var newFlags = 0;
+      for (var k in NODEFS.flagsForNodeMap) {
+        if (flags & k) {
+          newFlags |= NODEFS.flagsForNodeMap[k];
+          flags ^= k;
+        }
+      }
+
+      if (!flags) {
+        return newFlags;
       } else {
-        throw new FS.ErrnoError(ERRNO_CODES.EINVAL);
+        throw new FS.ErrnoError({{{ cDefine('EINVAL') }}});
       }
     },
     node_ops: {
@@ -89,7 +110,7 @@ mergeInto(LibraryManager.library, {
           stat = fs.lstatSync(path);
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
         // node.js v0.10.20 doesn't report blksize and blocks on Windows. Fake them with default blksize of 4096.
         // See http://support.microsoft.com/kb/140365
@@ -132,7 +153,7 @@ mergeInto(LibraryManager.library, {
           }
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
       },
       lookup: function (parent, name) {
@@ -152,7 +173,7 @@ mergeInto(LibraryManager.library, {
           }
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
         return node;
       },
@@ -163,8 +184,9 @@ mergeInto(LibraryManager.library, {
           fs.renameSync(oldPath, newPath);
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
+        oldNode.name = newName;
       },
       unlink: function(parent, name) {
         var path = PATH.join2(NODEFS.realPath(parent), name);
@@ -172,7 +194,7 @@ mergeInto(LibraryManager.library, {
           fs.unlinkSync(path);
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
       },
       rmdir: function(parent, name) {
@@ -181,7 +203,7 @@ mergeInto(LibraryManager.library, {
           fs.rmdirSync(path);
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
       },
       readdir: function(node) {
@@ -190,7 +212,7 @@ mergeInto(LibraryManager.library, {
           return fs.readdirSync(path);
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
       },
       symlink: function(parent, newName, oldPath) {
@@ -199,7 +221,7 @@ mergeInto(LibraryManager.library, {
           fs.symlinkSync(oldPath, newPath);
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
       },
       readlink: function(node) {
@@ -210,7 +232,7 @@ mergeInto(LibraryManager.library, {
           return path;
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
       },
     },
@@ -219,11 +241,11 @@ mergeInto(LibraryManager.library, {
         var path = NODEFS.realPath(stream.node);
         try {
           if (FS.isFile(stream.node.mode)) {
-            stream.nfd = fs.openSync(path, NODEFS.flagsToPermissionString(stream.flags));
+            stream.nfd = fs.openSync(path, NODEFS.flagsForNode(stream.flags));
           }
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
       },
       close: function (stream) {
@@ -233,57 +255,71 @@ mergeInto(LibraryManager.library, {
           }
         } catch (e) {
           if (!e.code) throw e;
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
       },
       read: function (stream, buffer, offset, length, position) {
-        if (length === 0) return 0; // node errors on 0 length reads
-        // FIXME this is terrible.
-        var nbuffer = new Buffer(length);
-        var res;
+        // Node.js < 6 compatibility: node errors on 0 length reads
+        if (length === 0) return 0;
         try {
-          res = fs.readSync(stream.nfd, nbuffer, 0, length, position);
+          return fs.readSync(stream.nfd, NODEFS.bufferFrom(buffer.buffer), offset, length, position);
         } catch (e) {
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
-        if (res > 0) {
-          for (var i = 0; i < res; i++) {
-            buffer[offset + i] = nbuffer[i];
-          }
-        }
-        return res;
       },
       write: function (stream, buffer, offset, length, position) {
-        // FIXME this is terrible.
-        var nbuffer = new Buffer(buffer.subarray(offset, offset + length));
-        var res;
         try {
-          res = fs.writeSync(stream.nfd, nbuffer, 0, length, position);
+          return fs.writeSync(stream.nfd, NODEFS.bufferFrom(buffer.buffer), offset, length, position);
         } catch (e) {
-          throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+          throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
         }
-        return res;
       },
       llseek: function (stream, offset, whence) {
         var position = offset;
-        if (whence === 1) {  // SEEK_CUR.
+        if (whence === {{{ cDefine('SEEK_CUR') }}}) {
           position += stream.position;
-        } else if (whence === 2) {  // SEEK_END.
+        } else if (whence === {{{ cDefine('SEEK_END') }}}) {
           if (FS.isFile(stream.node.mode)) {
             try {
               var stat = fs.fstatSync(stream.nfd);
               position += stat.size;
             } catch (e) {
-              throw new FS.ErrnoError(ERRNO_CODES[e.code]);
+              throw new FS.ErrnoError(NODEFS.convertNodeCode(e));
             }
           }
         }
 
         if (position < 0) {
-          throw new FS.ErrnoError(ERRNO_CODES.EINVAL);
+          throw new FS.ErrnoError({{{ cDefine('EINVAL') }}});
         }
 
         return position;
+      },
+      mmap: function(stream, address, length, position, prot, flags) {
+        if (address !== 0) {
+          // We don't currently support location hints for the address of the mapping
+          throw new FS.ErrnoError({{{ cDefine('EINVAL') }}});
+        }
+        if (!FS.isFile(stream.node.mode)) {
+          throw new FS.ErrnoError({{{ cDefine('ENODEV') }}});
+        }
+
+        var ptr = mmapAlloc(length);
+
+        NODEFS.stream_ops.read(stream, HEAP8, ptr, length, position);
+        return { ptr: ptr, allocated: true };
+      },
+      msync: function(stream, buffer, offset, length, mmapFlags) {
+        if (!FS.isFile(stream.node.mode)) {
+          throw new FS.ErrnoError({{{ cDefine('ENODEV') }}});
+        }
+        if (mmapFlags & {{{ cDefine('MAP_PRIVATE') }}}) {
+          // MAP_PRIVATE calls need not to be synced back to underlying fs
+          return 0;
+        }
+
+        var bytesWritten = NODEFS.stream_ops.write(stream, buffer, 0, length, offset, false);
+        return 0;
       }
     }
   }

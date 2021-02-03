@@ -1,3 +1,10 @@
+/*
+ * Copyright 2011 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
@@ -12,7 +19,7 @@ int main() {
 
     FS.mkdir('/folder');
     FS.symlink('/folder', '/link');
-    FS.writeFile('/file', '', { mode: 0777 });
+    FS.writeFile('/file', "", { mode: 0o777 });
   );
 
   char buffer[256];
@@ -29,6 +36,26 @@ int main() {
     printf("errno: %d\n", errno);
   }
   errno = 0;
+  printf("\n");
+
+  printf("chdir(dir): %d\n", chdir("/dir"));
+  printf("errno: %d\n", errno);
+  if (!errno) {
+    errno = 0;
+    printf("getcwd: %s\n", getcwd(buffer, 256));
+    printf("errno: %d\n", errno);
+  }
+  errno = 2;
+  printf("\n");
+
+  printf("chdir(\"\"): %d\n", chdir(""));
+  printf("errno: %d\n", errno);
+  if (!errno) {
+    errno = 0;
+    printf("getcwd: %s\n", getcwd(buffer, 256));
+    printf("errno: %d\n", errno);
+  }
+  errno = 2;
   printf("\n");
 
   printf("chdir(device): %d\n", chdir("/device"));

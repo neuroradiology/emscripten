@@ -1,3 +1,9 @@
+/**
+ * @license
+ * Copyright 2013 The Emscripten Authors
+ * SPDX-License-Identifier: MIT
+ */
+
 function headlessCanvas() {
   var that = this;
   var ret = {
@@ -607,7 +613,7 @@ function headlessCanvas() {
     eventListeners: {},
     addEventListener: function(){},
     removeEventListener: function(){},
-    requestFullScreen: function() {
+    requestFullscreen: function() {
       document.fullscreenElement = document.getElementById('canvas');
       window.setTimeout(function() {
         document.callEventListeners('fullscreenchange');

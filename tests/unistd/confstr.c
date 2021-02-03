@@ -1,3 +1,10 @@
+/*
+ * Copyright 2011 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
@@ -42,13 +49,13 @@ int main() {
   char buffer[256];
 
   for (int i = 0; i < sizeof vals / sizeof vals[0]; i++) {
-    printf("ret: %d\n", confstr(vals[i], buffer, 256));
+    printf("ret: %zi\n", confstr(vals[i], buffer, 256));
     printf("%s: %s\n", names[i], buffer);
     printf("errno: %d\n\n", errno);
     errno = 0;
   }
 
-  printf("(invalid) ret: %d\n", confstr(-123, buffer, 256));
+  printf("(invalid) ret: %zi\n", confstr(-123, buffer, 256));
   printf("errno: %d\n", errno);
 
   return 0;

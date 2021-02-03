@@ -1,3 +1,9 @@
+/**
+ * @license
+ * Copyright 2014 The Emscripten Authors
+ * SPDX-License-Identifier: MIT
+ */
+
 var LibraryTracing = {
   $EmscriptenTrace__deps: [
     'emscripten_trace_js_configure', 'emscripten_trace_configure_for_google_wtf',
@@ -95,7 +101,7 @@ var LibraryTracing = {
     },
 
     configureForGoogleWTF: function() {
-      if (window && window.wtf) {
+      if (window && window['wtf']) {
         EmscriptenTrace.googleWTFEnabled = true;
       } else {
         console.log('GOOGLE WTF NOT AVAILABLE TO ENABLE');
@@ -107,14 +113,14 @@ var LibraryTracing = {
         EmscriptenTrace.worker.postMessage({ 'cmd': 'post',
                                              'entry': entry });
       } else if (EmscriptenTrace.postEnabled && EmscriptenTrace.testingEnabled) {
-        Module.print('Tracing ' + entry);
+        out('Tracing ' + entry);
       }
     },
 
     googleWTFEnterScope: function(name) {
       var scopeEvent = EmscriptenTrace.googleWTFData['cachedScopes'][name];
       if (!scopeEvent) {
-        scopeEvent = window.wtf.trace.events.createScope(name);
+        scopeEvent = window['wtf'].trace.events.createScope(name);
         EmscriptenTrace.googleWTFData['cachedScopes'][name] = scopeEvent;
       }
       var scope = scopeEvent();
@@ -123,7 +129,7 @@ var LibraryTracing = {
 
     googleWTFExitScope: function() {
       var scope = EmscriptenTrace.googleWTFData['scopeStack'].pop();
-      window.wtf.trace.leaveScope(scope);
+      window['wtf'].trace.leaveScope(scope);
     }
   },
 
@@ -132,8 +138,8 @@ var LibraryTracing = {
   },
 
   emscripten_trace_configure: function(collector_url, application) {
-    EmscriptenTrace.configure(Pointer_stringify(collector_url),
-                              Pointer_stringify(application));
+    EmscriptenTrace.configure(UTF8ToString(collector_url),
+                              UTF8ToString(application));
   },
 
   emscripten_trace_configure_for_test: function() {
@@ -149,7 +155,7 @@ var LibraryTracing = {
   },
 
   emscripten_trace_set_session_username: function(username) {
-    EmscriptenTrace.post(EmscriptenTrace.EVENT_USER_NAME, Pointer_stringify(username));
+    EmscriptenTrace.post(EmscriptenTrace.EVENT_USER_NAME, UTF8ToString(username));
   },
 
   emscripten_trace_record_frame_start: function() {
@@ -178,8 +184,8 @@ var LibraryTracing = {
     if (EmscriptenTrace.postEnabled) {
       var now = EmscriptenTrace.now();
       EmscriptenTrace.post([EmscriptenTrace.EVENT_LOG_MESSAGE, now,
-                            Pointer_stringify(channel),
-                            Pointer_stringify(message)]);
+                            UTF8ToString(channel),
+                            UTF8ToString(message)]);
     }
   },
 
@@ -190,7 +196,7 @@ var LibraryTracing = {
                             "MARK", message]);
     }
     if (EmscriptenTrace.googleWTFEnabled) {
-      window.wtf.trace.mark(message);
+      window['wtf'].trace.mark(message);
     }
   },
 
@@ -198,10 +204,10 @@ var LibraryTracing = {
     if (EmscriptenTrace.postEnabled) {
       var now = EmscriptenTrace.now();
       EmscriptenTrace.post([EmscriptenTrace.EVENT_LOG_MESSAGE, now,
-                            "MARK", Pointer_stringify(message)]);
+                            "MARK", UTF8ToString(message)]);
     }
     if (EmscriptenTrace.googleWTFEnabled) {
-      window.wtf.trace.mark(Pointer_stringify(message));
+      window['wtf'].trace.mark(UTF8ToString(message));
     }
   },
 
@@ -209,7 +215,7 @@ var LibraryTracing = {
     var now = EmscriptenTrace.now();
     var callstack = (new Error).stack;
     EmscriptenTrace.post([EmscriptenTrace.EVENT_REPORT_ERROR, now,
-                          Pointer_stringify(error), callstack]);
+                          UTF8ToString(error), callstack]);
   },
 
   emscripten_trace_record_allocation: function(address, size) {
@@ -242,7 +248,7 @@ var LibraryTracing = {
   emscripten_trace_annotate_address_type: function(address, type_name) {
     if (EmscriptenTrace.postEnabled) {
       EmscriptenTrace.post([EmscriptenTrace.EVENT_ANNOTATE_TYPE, address,
-                            Pointer_stringify(type_name)]);
+                            UTF8ToString(type_name)]);
     }
   },
 
@@ -256,14 +262,12 @@ var LibraryTracing = {
   emscripten_trace_report_memory_layout: function() {
     if (EmscriptenTrace.postEnabled) {
       var memory_layout = {
-        'static_base':  STATIC_BASE,
-        'static_top':   STATICTOP,
-        'stack_base':   STACK_BASE,
-        'stack_top':    STACKTOP,
-        'stack_max':    STACK_MAX,
-        'dynamic_base': DYNAMIC_BASE,
-        'dynamic_top':  DYNAMICTOP,
-        'total_memory': TOTAL_MEMORY
+        'static_base':  {{{ GLOBAL_BASE }}},
+        'stack_base':   _emscripten_stack_get_base(),
+        'stack_top':    _emscripten_stack_get_current(),
+        'stack_max':    _emscripten_stack_get_end(),
+        'dynamic_top':  _sbrk(),
+        'total_memory': HEAP8.length
       };
       var now = EmscriptenTrace.now();
       EmscriptenTrace.post([EmscriptenTrace.EVENT_MEMORY_LAYOUT,
@@ -309,10 +313,10 @@ var LibraryTracing = {
     if (EmscriptenTrace.postEnabled) {
       var now = EmscriptenTrace.now();
       EmscriptenTrace.post([EmscriptenTrace.EVENT_ENTER_CONTEXT,
-                            now, Pointer_stringify(name)]);
+                            now, UTF8ToString(name)]);
     }
     if (EmscriptenTrace.googleWTFEnabled) {
-      EmscriptenTrace.googleWTFEnterScope(Pointer_stringify(name));
+      EmscriptenTrace.googleWTFEnterScope(UTF8ToString(name));
     }
   },
 
@@ -330,15 +334,15 @@ var LibraryTracing = {
     if (EmscriptenTrace.postEnabled) {
       var now = EmscriptenTrace.now();
       EmscriptenTrace.post([EmscriptenTrace.EVENT_TASK_START,
-                            now, task_id, Pointer_stringify(name)]);
+                            now, task_id, UTF8ToString(name)]);
     }
   },
 
   emscripten_trace_task_associate_data: function(key, value) {
     if (EmscriptenTrace.postEnabled) {
       EmscriptenTrace.post([EmscriptenTrace.EVENT_TASK_ASSOCIATE_DATA,
-                            Pointer_stringify(key),
-                            Pointer_stringify(value)]);
+                            UTF8ToString(key),
+                            UTF8ToString(value)]);
     }
   },
 
@@ -346,7 +350,7 @@ var LibraryTracing = {
     if (EmscriptenTrace.postEnabled) {
       var now = EmscriptenTrace.now();
       EmscriptenTrace.post([EmscriptenTrace.EVENT_TASK_SUSPEND,
-                            now, Pointer_stringify(explanation)]);
+                            now, UTF8ToString(explanation)]);
     }
   },
 
@@ -354,7 +358,7 @@ var LibraryTracing = {
     if (EmscriptenTrace.postEnabled) {
       var now = EmscriptenTrace.now();
       EmscriptenTrace.post([EmscriptenTrace.EVENT_TASK_RESUME,
-                            now, task_id, Pointer_stringify(explanation)]);
+                            now, task_id, UTF8ToString(explanation)]);
     }
   },
 

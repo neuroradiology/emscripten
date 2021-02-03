@@ -1,3 +1,9 @@
+/**
+ * @license
+ * Copyright 2013 The Emscripten Authors
+ * SPDX-License-Identifier: MIT
+ */
+
 // Implementation of libuuid creating RFC4122 version 4 random UUIDs.
 
 mergeInto(LibraryManager.library, {
@@ -8,7 +14,7 @@ mergeInto(LibraryManager.library, {
   },
 
   // Compare whether or not two 'compact' UUIDs are the same.
-  // Returns an integer less than, equal to, or greater than zero if uu1  is found, respectively, to be   
+  // Returns an integer less than, equal to, or greater than zero if uu1  is found, respectively, to be
   // lexigraphically  less  than,  equal, or greater than uu2.
   uuid_compare__deps: ['memcmp'],
   uuid_compare: function(uu1, uu2) {
@@ -30,13 +36,15 @@ mergeInto(LibraryManager.library, {
     var uuid = null;
 
     if (ENVIRONMENT_IS_NODE) {
+#if ENVIRONMENT_MAY_BE_NODE
       // If Node.js try to use crypto.randomBytes
       try {
-        var rb = require('crypto').randomBytes;
+        var rb = require('crypto')['randomBytes'];
         uuid = rb(16);
       } catch(e) {}
+#endif // ENVIRONMENT_MAY_BE_NODE
     } else if (ENVIRONMENT_IS_WEB &&
-               typeof(window.crypto) !== 'undefined' && 
+               typeof(window.crypto) !== 'undefined' &&
                typeof(window.crypto.getRandomValues) !== 'undefined') {
       // If crypto.getRandomValues is available try to use it.
       uuid = new Uint8Array(16);
@@ -78,7 +86,7 @@ mergeInto(LibraryManager.library, {
   // pointed to by uu, otherwise -1 is returned.
   uuid_parse: function(inp, uu) {
     // int uuid_parse(const char *in, uuid_t uu);
-    var inp = Pointer_stringify(inp);
+    inp = UTF8ToString(inp);
     if (inp.length === 36) {
       var i = 0;
       var uuid = new Array(16);
@@ -98,8 +106,9 @@ mergeInto(LibraryManager.library, {
       return -1;
     }
   },
- 
+
   // Convert a 'compact' form UUID to a string, if the upper parameter is supplied make the string upper case.
+  uuid_unparse__docs: '/** @param {number|boolean=} upper */',
   uuid_unparse: function(uu, out, upper) {
     // void uuid_unparse(const uuid_t uu, char *out);
     var i = 0;
@@ -110,7 +119,7 @@ mergeInto(LibraryManager.library, {
       i++;
       return r;
     });
-    writeStringToMemory(uuid, out);
+    stringToUTF8(uuid, out, 37); // Always fixed 36 bytes of ASCII characters and a trailing \0.
   },
 
   // Convert a 'compact' form UUID to a lower case string.

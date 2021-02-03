@@ -1,17 +1,17 @@
-#!/usr/bin/env python
-
-# This script should work in python 2 *or* 3. It loads emcc.py, which needs python 2.
-# It also tells emcc.py that we want C++ and not C by default
+#!/usr/bin/env python3
+# Copyright 2011 The Emscripten Authors.  All rights reserved.
+# Emscripten is available under two separate licenses, the MIT license and the
+# University of Illinois/NCSA Open Source License.  Both these licenses can be
+# found in the LICENSE file.
 
 import sys
+import emcc
 
-sys.argv += ['--emscripten-cxx']
+emcc.run_via_emxx = True
 
-if sys.version_info.major == 2:
-  import emcc
-  if __name__ == '__main__':
-    emcc.run()
-else:
-  import os, subprocess
-  if __name__ == '__main__':
-    sys.exit(subprocess.call(['python2', os.path.join(os.path.dirname(__file__), 'emcc.py')] + sys.argv[1:]))
+if __name__ == '__main__':
+  try:
+    sys.exit(emcc.run(sys.argv))
+  except KeyboardInterrupt:
+    emcc.logger.warning('KeyboardInterrupt')
+    sys.exit(1)

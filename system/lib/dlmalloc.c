@@ -1,11 +1,20 @@
 
 /* XXX Emscripten XXX */
 #if __EMSCRIPTEN__
-#define DLMALLOC_EXPORT __attribute__((__weak__, __visibility__("default")))
+// When building for wasm we export `malloc` and `emscripten_builtin_malloc` as
+// weak alias of the internal `dlmalloc` which is static to this file.
+#define DLMALLOC_EXPORT static
 /* mmap uses malloc, so malloc can't use mmap */
 #define HAVE_MMAP 0
 /* we can only grow the heap up anyhow, so don't try to trim */
 #define MORECORE_CANNOT_TRIM 1
+#ifndef DLMALLOC_DEBUG
+/* dlmalloc has many checks, calls to abort() increase code size,
+   leave them only in debug builds */
+#define ABORT __builtin_unreachable()
+/* allow malloc stats only in debug builds, which brings in stdio code. */
+#define NO_MALLOC_STATS 1
+#endif
 /* XXX Emscripten Tracing API. This defines away the code if tracing is disabled. */
 #include <emscripten/trace.h>
 
@@ -610,8 +619,15 @@
 #define MAX_SIZE_T           (~(size_t)0)
 
 #ifndef USE_LOCKS /* ensure true if spin or recursive locks set */
-#define USE_LOCKS  ((defined(USE_SPIN_LOCKS) && USE_SPIN_LOCKS != 0) || \
-(defined(USE_RECURSIVE_LOCKS) && USE_RECURSIVE_LOCKS != 0))
+/* XXX: The following block adapted locally to avoid
+        clean up new Clang -Wexpansion-to-defined warnings.
+        http://lists.llvm.org/pipermail/cfe-commits/Week-of-Mon-20160118/147239.html */
+#if (defined(USE_SPIN_LOCKS) && USE_SPIN_LOCKS != 0) || \
+    (defined(USE_RECURSIVE_LOCKS) && USE_RECURSIVE_LOCKS != 0)
+#define USE_LOCKS 1
+#else
+#define USE_LOCKS 0
+#endif
 #endif /* USE_LOCKS */
 
 #if USE_LOCKS /* Spin locks for gcc >= 4.1, older gcc on x86, MSC >= 1310 */
@@ -838,28 +854,37 @@ extern "C" {
     /* ------------------- Declarations of public routines ------------------- */
     
 #ifndef USE_DL_PREFIX
-#define dlcalloc               calloc
-#define dlfree                 free
-#define dlmalloc               malloc
-#define dlmemalign             memalign
-#define dlposix_memalign       posix_memalign
-#define dlrealloc              realloc
-#define dlrealloc_in_place     realloc_in_place
-#define dlvalloc               valloc
-#define dlpvalloc              pvalloc
-#define dlmallinfo             mallinfo
-#define dlmallopt              mallopt
-#define dlmalloc_trim          malloc_trim
-#define dlmalloc_stats         malloc_stats
-#define dlmalloc_usable_size   malloc_usable_size
-#define dlmalloc_footprint     malloc_footprint
-#define dlmalloc_max_footprint malloc_max_footprint
-#define dlmalloc_footprint_limit malloc_footprint_limit
-#define dlmalloc_set_footprint_limit malloc_set_footprint_limit
-#define dlmalloc_inspect_all   malloc_inspect_all
-#define dlindependent_calloc   independent_calloc
-#define dlindependent_comalloc independent_comalloc
-#define dlbulk_free            bulk_free
+// XXX Emscripten XXX
+#if defined(__EMSCRIPTEN__)
+void* malloc(size_t) __attribute__((weak, alias("dlmalloc")));
+void  free(void*) __attribute__((weak, alias("dlfree")));
+void* calloc(size_t, size_t) __attribute__((weak, alias("dlcalloc")));
+void* realloc(void*, size_t) __attribute__((weak, alias("dlrealloc")));
+void* realloc_in_place(void*, size_t) __attribute__((weak, alias("dlrealloc_in_place")));
+void* memalign(size_t, size_t) __attribute__((weak, alias("dlmemalign")));
+int posix_memalign(void**, size_t, size_t) __attribute__((weak, alias("dlposix_memalign")));
+void* valloc(size_t) __attribute__((weak, alias("dlvalloc")));
+void* pvalloc(size_t) __attribute__((weak, alias("dlpvalloc")));
+#if !NO_MALLINFO
+struct mallinfo mallinfo(void) __attribute__((weak, alias("dlmallinfo")));
+#endif
+int mallopt(int, int) __attribute__((weak, alias("dlmallopt")));
+int malloc_trim(size_t) __attribute__((weak, alias("dlmalloc_trim")));
+#if !NO_MALLOC_STATS
+void malloc_stats(void) __attribute__((weak, alias("dlmalloc_stats")));
+#endif
+size_t malloc_usable_size(const void*) __attribute__((weak, alias("dlmalloc_usable_size")));
+size_t malloc_footprint(void) __attribute__((weak, alias("dlmalloc_footprint")));
+size_t malloc_max_footprint(void) __attribute__((weak, alias("dlmalloc_max_footprint")));
+size_t malloc_footprint_limit(void) __attribute__((weak, alias("dlmalloc_footprint_limit")));
+size_t malloc_set_footprint_limit(size_t bytes) __attribute__((weak, alias("dlmalloc_set_footprint_limit")));
+#if MALLOC_INSPECT_ALL
+void malloc_inspect_all(void(*handler)(void*, void *, size_t, void*), void* arg) __attribute__((weak, alias("dlmalloc_inspect_all")));
+#endif
+void** independent_calloc(size_t, size_t, void**) __attribute__((weak, alias("dlindependent_calloc")));
+void** independent_comalloc(size_t, size_t*, void**) __attribute__((weak, alias("dlindependent_comalloc")));
+size_t bulk_free(void**, size_t n_elements) __attribute__((weak, alias("dlbulk_free")));
+#endif /*__EMSCRIPTEN__*/
 #endif /* USE_DL_PREFIX */
     
     /*
@@ -1579,7 +1604,11 @@ extern "C" {
 #    endif
 #  endif
 #  ifdef _SC_PAGE_SIZE
-#    define malloc_getpagesize sysconf(_SC_PAGE_SIZE)
+#    if defined(__EMSCRIPTEN__)
+#      define malloc_getpagesize (4096) /* avoid sysconf calls during startup */
+#    else
+#      define malloc_getpagesize sysconf(_SC_PAGE_SIZE)
+#    endif
 #  else
 #    if defined(BSD) || defined(DGUX) || defined(HAVE_GETPAGESIZE)
 extern size_t getpagesize();
@@ -3194,7 +3223,7 @@ static int init_mparams(void) {
 #endif /* USE_DEV_RANDOM */
 #ifdef WIN32
                 magic = (size_t)(GetTickCount() ^ (size_t)0x55555555U);
-#elif defined(LACKS_TIME_H)
+#elif defined(LACKS_TIME_H) || defined(__EMSCRIPTEN__)
             magic = (size_t)&magic ^ (size_t)0x55555555U;
 #else
             magic = (size_t)(time(0) ^ (size_t)0x55555555U);
@@ -5243,6 +5272,10 @@ void* dlrealloc(void* oldmem, size_t bytes) {
             if (newp != 0) {
                 check_inuse_chunk(m, newp);
                 mem = chunk2mem(newp);
+#if __EMSCRIPTEN__
+                /* XXX Emscripten Tracing API. */
+                emscripten_trace_record_reallocation(oldmem, mem, bytes);
+#endif
             }
             else {
                 mem = internal_malloc(m, bytes);
@@ -5253,10 +5286,6 @@ void* dlrealloc(void* oldmem, size_t bytes) {
                 }
             }
         }
-#if __EMSCRIPTEN__
-        /* XXX Emscripten Tracing API. */
-        emscripten_trace_record_reallocation(oldmem, mem, bytes);
-#endif
     }
     return mem;
 }
@@ -5289,6 +5318,10 @@ void* dlrealloc_in_place(void* oldmem, size_t bytes) {
             }
         }
     }
+#if __EMSCRIPTEN__
+    /* XXX Emscripten Tracing API. */
+    emscripten_trace_record_reallocation(oldmem, mem, bytes);
+#endif
     return mem;
 }
 
@@ -6006,6 +6039,16 @@ int mspace_mallopt(int param_number, int value) {
 
 #endif /* MSPACES */
 
+// Export malloc and free as duplicate names emscripten_builtin_malloc and
+// emscripten_builtin_free so that applications can replace malloc and free
+// in their code, and make those replacements refer to the original dlmalloc
+// and dlfree from this file.
+// This allows an easy mechanism for hooking into memory allocation.
+#if defined(__EMSCRIPTEN__) && !ONLY_MSPACES
+extern __typeof(malloc) emscripten_builtin_malloc __attribute__((alias("dlmalloc")));
+extern __typeof(free) emscripten_builtin_free __attribute__((alias("dlfree")));
+extern __typeof(memalign) emscripten_builtin_memalign __attribute__((alias("dlmemalign")));
+#endif
 
 /* -------------------- Alternative MORECORE functions ------------------- */
 

@@ -6,257 +6,273 @@ val.h (under-construction)
 
 .. COMMENT (Not rendered) : This created from val.h header file on 10 Aug 2014-03
 
-The *Embind* C++ class :cpp:class:`emscripten::val` (defined in `val.h <https://github.com/kripken/emscripten/blob/master/system/include/emscripten/val.h>`_) is used to *transliterate* JavaScript code to C++. 
+The *Embind* C++ class :cpp:class:`emscripten::val` (defined in `val.h <https://github.com/emscripten-core/emscripten/blob/master/system/include/emscripten/val.h>`_) is used to *transliterate* JavaScript code to C++.
 
 Guide material for this class can be found in :ref:`embind-val-guide`.
 
 
 .. cpp:namespace:: emscripten
-	
+
 .. cpp:class:: emscripten::val
 
-	This class is a C++ data type that can be used to represent (and provide convenient access to) any JavaScript object. You can use it to call a JavaScript object, read and write its properties, or coerce it to a C++ value like a ``bool``, ``int``, or ``std::string``.
-		
-	For example, the code below shows some simple JavaScript for making an XHR request on a URL:
+  This class is a C++ data type that can be used to represent (and provide convenient access to) any JavaScript object. You can use it to call a JavaScript object, read and write its properties, or coerce it to a C++ value like a ``bool``, ``int``, or ``std::string``.
 
-	.. code:: javascript
+  For example, the code below shows some simple JavaScript for making an XHR request on a URL:
 
-		var xhr = new XMLHttpRequest;
-		xhr.open("GET", "http://url");
+  .. code:: javascript
 
-	
-	This same code can be written in C++, using :cpp:func:`~emscripten::val::global` to get the symbol for the global ``XMLHttpRequest`` object and then using it to open a URL.
+    var xhr = new XMLHttpRequest;
+    xhr.open("GET", "http://url");
 
-	
-	.. code:: cpp
 
-		val xhr = val::global("XMLHttpRequest").new_();
-		xhr.call("open", std::string("GET"), std::string("http://url"));
+  This same code can be written in C++, using :cpp:func:`~emscripten::val::global` to get the symbol for the global ``XMLHttpRequest`` object and then using it to open a URL.
 
-		
-	See :ref:`embind-val-guide` for other examples.
-		
 
-	.. todo:: 
-	
-		**HamishW** Notes from source FYI: Can/should these be included? ::
+  .. code:: cpp
 
-			// missing operators:
-			// * delete
-			// * in
-			// * instanceof
-			// * ! ~ - + ++ --
-			// * * / %
-			// * + -
-			// * << >> >>>
-			// * < <= > >=
-			// * == != === !==
-			// * & ^ | && || ?:
-			//
-			// exposing void, comma, and conditional is unnecessary
-			// same with: = += -= *= /= %= <<= >>= >>>= &= ^= |=
+    val xhr = val::global("XMLHttpRequest").new_();
+    xhr.call("open", std::string("GET"), std::string("http://url"));
 
+  You can test whether the ``open`` method call was successful using :cpp:func:`~emscripten::val::operator[]` to read an object property, then :cpp:func:`~emscripten::val::as` to coerce the type:
 
-	.. cpp:function:: static val array()
+  .. code:: cpp
 
-		Creates and returns a new ``Array``.
-		
-		:returns: The new ``Array``.
+    const char* state;
+    switch (xhr["readyState"].as<int>()) {
+    case 0:
+      state = "UNSENT"; break;
+    case 1:
+      state = "OPENED"; break;
+    default:
+      state = "etc";
+    }
 
-		
-	.. cpp:function:: static val object()
+  See :ref:`embind-val-guide` for other examples.
 
-		Creates and returns a new ``Object``.
-		
-		:returns: The new ``Object``.
 
-		
-	.. cpp:function:: static val undefined()
+  .. todo::
 
-		Creates a ``val`` that represents ``undefined``.
-		
-		:returns: The ``val`` that represents ``undefined``.
-	
-	
-	.. cpp:function:: static val null()
+    **HamishW** Notes from source FYI: Can/should these be included? ::
 
-		Creates a ``val`` that represents ``null``. ``val::undefined()`` is the same, but for undefined.
-		
-		:returns: A ``val`` that represents ``null``.	
+      // missing operators:
+      // * delete
+      // * in
+      // * instanceof
+      // * ! ~ - + ++ --
+      // * * / %
+      // * + -
+      // * << >> >>>
+      // * < <= > >=
+      // * == != === !==
+      // * & ^ | && || ?:
+      //
+      // exposing void, comma, and conditional is unnecessary
+      // same with: = += -= *= /= %= <<= >>= >>>= &= ^= |=
 
-		
-	.. cpp:function:: static val take_ownership(internal::EM_VAL e)
 
-		**HamishW**-Replace with description.
-		
-		:returns: **HamishW**-Replace with description.		
+  .. cpp:function:: static val array()
 
+    Creates and returns a new ``Array``.
 
-	.. cpp:function:: static val global(const char* name)
+    :returns: The new ``Array``.
 
-		Looks up a global symbol.
-		
-		:param const char* name: **HamishW**-Replace with description.
-		:returns: **HamishW**-Replace with description.				
-		
 
+  .. cpp:function:: static val object()
 
-	.. cpp:function:: static val module_property(const char* name)
+    Creates and returns a new ``Object``.
 
-		Looks up a symbol on the emscripten Module object.
-		
-		:param const char* name: **HamishW**-Replace with description.
-		:returns: **HamishW**-Replace with description.				
+    :returns: The new ``Object``.
 
-		
-	.. cpp:function:: static val module_property(const char* name)
 
-		**HamishW**-Replace with description.
-		
-		:param const char* name: **HamishW**-Replace with description.
-		:returns: **HamishW**-Replace with description.	
+  .. cpp:function:: static val undefined()
 
-	.. cpp:function:: explicit val(T&& value)
+    Creates a ``val`` that represents ``undefined``.
 
-		Constructor.
-		
-		A ``val`` can be constructed by explicit construction from any C++ type. For example, ``val(true)`` or ``val(std::string("foo"))``.
-		
-		:param T&& value: Any C++ type.
-		
-		
-	**HamishW** Don't know how following "floating statement works". Leaving here for discussion
-	``val() = delete;``
+    :returns: The ``val`` that represents ``undefined``.
 
-	 
-	.. cpp:function:: explicit val(const char* v)
 
-		**HamishW**-Replace with description.
-		
-		:param const char* v: **HamishW**-Replace with description.		
-		
+  .. cpp:function:: static val null()
 
-	.. cpp:function:: val(val&& v)
+    Creates a ``val`` that represents ``null``. ``val::undefined()`` is the same, but for undefined.
 
-		**HamishW**-Replace with description.
-		
-		:param val&& v: **HamishW**-Replace with description.	
-		
+    :returns: A ``val`` that represents ``null``.
 
-	.. cpp:function:: val(const val& v)
 
-		**HamishW**-Replace with description.
-		
-		:param const val& v: **HamishW**-Replace with description.	
-        
+  .. cpp:function:: static val take_ownership(internal::EM_VAL e)
 
-	.. cpp:function:: ~val()
+    **HamishW**-Replace with description.
 
-		Destructor. **HamishW**-Replace with further description or delete comment.
+    :returns: **HamishW**-Replace with description.
 
-		
-	.. cpp:function:: val(const val& v)
 
-		**HamishW**-Replace with description.
-		
-		:param const val& v: **HamishW**-Replace with description.			
-		
+  .. cpp:function:: static val global(const char* name)
 
-	.. cpp:function:: val& operator=(val&& v)
+    Looks up a global symbol.
 
-		**HamishW**-Replace with description.
-		
-		:param val&& v: **HamishW**-Replace with description.
-		:returns: **HamishW**-Replace with description.
+    :param const char* name: **HamishW**-Replace with description.
+    :returns: **HamishW**-Replace with description.
 
 
-	.. cpp:function:: val& operator=(const val& v)
 
-		**HamishW**-Replace with description.
-		
-		:param val&& v: **HamishW**-Replace with description.
-		:returns: **HamishW**-Replace with description.		
+  .. cpp:function:: static val module_property(const char* name)
 
-		
-	.. cpp:function:: bool hasOwnProperty(const char* key) const
+    Looks up a symbol on the emscripten Module object.
 
-		Test whether ... **HamishW**-Replace with description.
-		
-		:param const char* key: **HamishW**-Replace with description.
-		:returns: **HamishW**-Replace with description.				
+    :param const char* name: **HamishW**-Replace with description.
+    :returns: **HamishW**-Replace with description.
 
-		
-	.. cpp:function:: val new_()
-	
-		prototype: 
-		
-		::
-		
-			template<typename... Args>
-			val new_(Args&&... args) const
 
-		**HamishW**-Replace with description.
-		
-		:param Args&&... args: **HamishW**-Replace with description. Note that this is a templated value.
-		:returns: **HamishW**-Replace with description.				
+  .. cpp:function:: explicit val(T&& value)
 
+    Constructor.
 
+    A ``val`` can be constructed by explicit construction from any C++ type. For example, ``val(true)`` or ``val(std::string("foo"))``.
 
-	.. cpp:function:: val operator[](const T& key) const
+    :param T&& value: Any C++ type.
 
-		**HamishW**-Replace with description.
-		
-		:param const T& key: **HamishW**-Replace with description. Note that this is a templated value.
-		:returns: **HamishW**-Replace with description.		
 
+  **HamishW** Don't know how following "floating statement works". Leaving here for discussion
+  ``val() = delete;``
 
-	.. cpp:function:: void set(const K& key, const val& v)
 
-		Set the specified (``key``) property of a JavaScript object (accessed through a ``val``) with the value ``v``. **HamishW**-Replace with description.
-		
-		:param const K& key: **HamishW**-Replace with description. Note that this is a templated value.
-		:param const val& v: **HamishW**-Replace with description.	 Note that this is a templated value.
-		
+  .. cpp:function:: explicit val(const char* v)
 
-	.. cpp:function:: val operator()(Args&&... args)
+    **HamishW**-Replace with description.
 
-		**HamishW**-Replace with description.
-		
-		:param Args&&... args: **HamishW**-Replace with description. Note that this is a templated value.	
-		
+    :param const char* v: **HamishW**-Replace with description.
 
-	.. cpp:function:: ReturnValue call(const char* name, Args&&... args) const
 
-		**HamishW**-Replace with description.
-		
-		:param const char* name: **HamishW**-Replace with description. 
-		:param Args&&... args: **HamishW**-Replace with description. Note that this is a templated value.			
+  .. cpp:function:: val(val&& v)
 
-		
-	.. cpp:function:: T as() const
+    **HamishW**-Replace with description.
 
-		**HamishW**-Replace with description.
-		
-		:returns: **HamishW**-Replace with description. Note that this is a templated value.		
+    :param val&& v: **HamishW**-Replace with description.
 
 
-	.. cpp:function:: val typeof() const
+  .. cpp:function:: val(const val& v)
 
-		**HamishW**-Replace with description.
-		
-		:returns: **HamishW**-Replace with description. 	
-		
-		
-	.. cpp:function:: std::vector<T> vecFromJSArray(val v)
+    **HamishW**-Replace with description.
 
-		**HamishW**-Replace with description.
-		
-		**HamishW**. I believe NOT internal. Please confirm.
-		
-		:param val v: **HamishW**-Replace with description. 
-		:returns: **HamishW**-Replace with description. 	
-		
-		
+    :param const val& v: **HamishW**-Replace with description.
+
+
+  .. cpp:function:: ~val()
+
+    Destructor. **HamishW**-Replace with further description or delete comment.
+
+
+  .. cpp:function:: val& operator=(val&& v)
+
+    **HamishW**-Replace with description.
+
+    :param val&& v: **HamishW**-Replace with description.
+    :returns: **HamishW**-Replace with description.
+
+
+  .. cpp:function:: val& operator=(const val& v)
+
+    **HamishW**-Replace with description.
+
+    :param val&& v: **HamishW**-Replace with description.
+    :returns: **HamishW**-Replace with description.
+
+
+  .. cpp:function:: bool hasOwnProperty(const char* key) const
+
+    Test whether ... **HamishW**-Replace with description.
+
+    :param const char* key: **HamishW**-Replace with description.
+    :returns: **HamishW**-Replace with description.
+
+
+  .. cpp:function:: val new_()
+
+    prototype:
+
+    ::
+
+      template<typename... Args>
+      val new_(Args&&... args) const
+
+    **HamishW**-Replace with description.
+
+    :param Args&&... args: **HamishW**-Replace with description. Note that this is a templated value.
+    :returns: **HamishW**-Replace with description.
+
+
+
+  .. cpp:function:: val operator[](const T& key) const
+
+    **HamishW**-Replace with description.
+
+    :param const T& key: **HamishW**-Replace with description. Note that this is a templated value.
+    :returns: **HamishW**-Replace with description.
+
+
+  .. cpp:function:: void set(const K& key, const val& v)
+
+    Set the specified (``key``) property of a JavaScript object (accessed through a ``val``) with the value ``v``. **HamishW**-Replace with description.
+
+    :param const K& key: **HamishW**-Replace with description. Note that this is a templated value.
+    :param const val& v: **HamishW**-Replace with description.   Note that this is a templated value.
+
+
+  .. cpp:function:: val operator()(Args&&... args)
+
+    **HamishW**-Replace with description.
+
+    :param Args&&... args: **HamishW**-Replace with description. Note that this is a templated value.
+
+
+  .. cpp:function:: ReturnValue call(const char* name, Args&&... args) const
+
+    **HamishW**-Replace with description.
+
+    :param const char* name: **HamishW**-Replace with description.
+    :param Args&&... args: **HamishW**-Replace with description. Note that this is a templated value.
+
+
+  .. cpp:function:: T as() const
+
+    **HamishW**-Replace with description.
+
+    :returns: **HamishW**-Replace with description. Note that this is a templated value.
+
+
+  .. cpp:function:: val typeof() const
+
+    **HamishW**-Replace with description.
+
+    :returns: **HamishW**-Replace with description.
+
+
+  .. cpp:function:: std::vector<T> vecFromJSArray(const val& v)
+
+    Copies a javascript array into a std::vector, checking the type of each element.
+    For a more efficient but unsafe version working with numbers, see convertJSArrayToNumberVector.
+
+    :param val v: The javascript array to be copied
+    :returns: A std::vector<T> made from the javascript array
+
+  .. cpp:function:: std::vector<T> convertJSArrayToNumberVector(const val& v)
+
+    Converts a javascript object into a std::vector<T> efficiently, as if using the javascript `Number()` function on each element.
+    This is way more efficient than vecFromJSArray on any array with more than 2 values, but is less safe.
+    No type checking is done, so any invalid array entry will silently be replaced by a NaN value (or 0 for interger types).
+
+    :param val v: The javascript (typed) array to be copied
+    :returns: A std::vector<T> made from the javascript array
+
+
+  .. cpp:function:: val await() const
+
+    Pauses the C++ to ``await`` the ``Promise`` / thenable.
+
+    :returns: The fulfilled value.
+
+    This method requires :ref:`Asyncify` to be enabled.
+
+
 .. cpp:type: EMSCRIPTEN_SYMBOL(name)
 
-	**HamishW**-Replace with description.		
+  **HamishW**-Replace with description.

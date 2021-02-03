@@ -1,11 +1,21 @@
+/**
+ * @license
+ * Copyright 2013 The Emscripten Authors
+ * SPDX-License-Identifier: MIT
+ */
+
 mergeInto(LibraryManager.library, {
   $TTY__deps: ['$FS'],
-  $TTY__postset: '__ATINIT__.unshift(function() { TTY.init() });' +
-                 '__ATEXIT__.push(function() { TTY.shutdown() });',
+#if !MINIMAL_RUNTIME
+  $TTY__postset: function() {
+    addAtInit('TTY.init();');
+    addAtExit('TTY.shutdown();');
+  },
+#endif
   $TTY: {
     ttys: [],
     init: function () {
-      // https://github.com/kripken/emscripten/pull/1555
+      // https://github.com/emscripten-core/emscripten/pull/1555
       // if (ENVIRONMENT_IS_NODE) {
       //   // currently, FS.init does not distinguish if process.stdin is a file or TTY
       //   // device, it always assumes it's a TTY device. because of this, we're forcing
@@ -15,7 +25,7 @@ mergeInto(LibraryManager.library, {
       // }
     },
     shutdown: function() {
-      // https://github.com/kripken/emscripten/pull/1555
+      // https://github.com/emscripten-core/emscripten/pull/1555
       // if (ENVIRONMENT_IS_NODE) {
       //   // inolen: any idea as to why node -e 'process.stdin.read()' wouldn't exit immediately (with process.stdin being a tty)?
       //   // isaacs: because now it's reading from the stream, you've expressed interest in it, so that read() kicks off a _read() which creates a ReadReq operation
@@ -33,7 +43,7 @@ mergeInto(LibraryManager.library, {
       open: function(stream) {
         var tty = TTY.ttys[stream.node.rdev];
         if (!tty) {
-          throw new FS.ErrnoError(ERRNO_CODES.ENODEV);
+          throw new FS.ErrnoError({{{ cDefine('ENODEV') }}});
         }
         stream.tty = tty;
         stream.seekable = false;
@@ -47,7 +57,7 @@ mergeInto(LibraryManager.library, {
       },
       read: function(stream, buffer, offset, length, pos /* ignored */) {
         if (!stream.tty || !stream.tty.ops.get_char) {
-          throw new FS.ErrnoError(ERRNO_CODES.ENXIO);
+          throw new FS.ErrnoError({{{ cDefine('ENXIO') }}});
         }
         var bytesRead = 0;
         for (var i = 0; i < length; i++) {
@@ -55,10 +65,10 @@ mergeInto(LibraryManager.library, {
           try {
             result = stream.tty.ops.get_char(stream.tty);
           } catch (e) {
-            throw new FS.ErrnoError(ERRNO_CODES.EIO);
+            throw new FS.ErrnoError({{{ cDefine('EIO') }}});
           }
           if (result === undefined && bytesRead === 0) {
-            throw new FS.ErrnoError(ERRNO_CODES.EAGAIN);
+            throw new FS.ErrnoError({{{ cDefine('EAGAIN') }}});
           }
           if (result === null || result === undefined) break;
           bytesRead++;
@@ -71,14 +81,14 @@ mergeInto(LibraryManager.library, {
       },
       write: function(stream, buffer, offset, length, pos) {
         if (!stream.tty || !stream.tty.ops.put_char) {
-          throw new FS.ErrnoError(ERRNO_CODES.ENXIO);
+          throw new FS.ErrnoError({{{ cDefine('ENXIO') }}});
         }
-        for (var i = 0; i < length; i++) {
-          try {
+        try {
+          for (var i = 0; i < length; i++) {
             stream.tty.ops.put_char(stream.tty, buffer[offset+i]);
-          } catch (e) {
-            throw new FS.ErrnoError(ERRNO_CODES.EIO);
           }
+        } catch (e) {
+          throw new FS.ErrnoError({{{ cDefine('EIO') }}});
         }
         if (length) {
           stream.node.timestamp = Date.now();
@@ -94,30 +104,30 @@ mergeInto(LibraryManager.library, {
       get_char: function(tty) {
         if (!tty.input.length) {
           var result = null;
+#if ENVIRONMENT_MAY_BE_NODE
           if (ENVIRONMENT_IS_NODE) {
             // we will read data by chunks of BUFSIZE
             var BUFSIZE = 256;
-            var buf = new Buffer(BUFSIZE);
+            var buf = Buffer.alloc ? Buffer.alloc(BUFSIZE) : new Buffer(BUFSIZE);
             var bytesRead = 0;
 
-            var fd = process.stdin.fd;
-            // Linux and Mac cannot use process.stdin.fd (which isn't set up as sync)
-            var usingDevice = false;
             try {
-              fd = fs.openSync('/dev/stdin', 'r');
-              usingDevice = true;
-            } catch (e) {}
+              bytesRead = nodeFS.readSync(process.stdin.fd, buf, 0, BUFSIZE, null);
+            } catch(e) {
+              // Cross-platform differences: on Windows, reading EOF throws an exception, but on other OSes,
+              // reading EOF returns 0. Uniformize behavior by treating the EOF exception to return 0.
+              if (e.toString().indexOf('EOF') != -1) bytesRead = 0;
+              else throw e;
+            }
 
-            bytesRead = fs.readSync(fd, buf, 0, BUFSIZE, null);
-
-            if (usingDevice) { fs.closeSync(fd); }
             if (bytesRead > 0) {
               result = buf.slice(0, bytesRead).toString('utf-8');
             } else {
               result = null;
             }
-
-          } else if (typeof window != 'undefined' &&
+          } else
+#endif
+          if (typeof window != 'undefined' &&
             typeof window.prompt == 'function') {
             // Browser.
             result = window.prompt('Input: ');  // returns null on cancel
@@ -140,7 +150,7 @@ mergeInto(LibraryManager.library, {
       },
       put_char: function(tty, val) {
         if (val === null || val === {{{ charCode('\n') }}}) {
-          Module['print'](UTF8ArrayToString(tty.output, 0));
+          out(UTF8ArrayToString(tty.output, 0));
           tty.output = [];
         } else {
           if (val != 0) tty.output.push(val); // val == 0 would cut text output off in the middle.
@@ -148,7 +158,7 @@ mergeInto(LibraryManager.library, {
       },
       flush: function(tty) {
         if (tty.output && tty.output.length > 0) {
-          Module['print'](UTF8ArrayToString(tty.output, 0));
+          out(UTF8ArrayToString(tty.output, 0));
           tty.output = [];
         }
       }
@@ -156,7 +166,7 @@ mergeInto(LibraryManager.library, {
     default_tty1_ops: {
       put_char: function(tty, val) {
         if (val === null || val === {{{ charCode('\n') }}}) {
-          Module['printErr'](UTF8ArrayToString(tty.output, 0));
+          err(UTF8ArrayToString(tty.output, 0));
           tty.output = [];
         } else {
           if (val != 0) tty.output.push(val);
@@ -164,7 +174,7 @@ mergeInto(LibraryManager.library, {
       },
       flush: function(tty) {
         if (tty.output && tty.output.length > 0) {
-          Module['printErr'](UTF8ArrayToString(tty.output, 0));
+          err(UTF8ArrayToString(tty.output, 0));
           tty.output = [];
         }
       }

@@ -1,4 +1,15 @@
+/*
+ * Copyright 2012 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #pragma once
+
+#if __cplusplus < 201103L
+#error Including <emscripten/val.h> requires building with -std=c++11 or newer!
+#endif
 
 #include <stdint.h> // uintptr_t
 #include <emscripten/wire.h>
@@ -57,6 +68,9 @@ namespace emscripten {
 
             bool _emval_equals(EM_VAL first, EM_VAL second);
             bool _emval_strictly_equals(EM_VAL first, EM_VAL second);
+            bool _emval_greater_than(EM_VAL first, EM_VAL second);
+            bool _emval_less_than(EM_VAL first, EM_VAL second);
+            bool _emval_not(EM_VAL object);
 
             EM_VAL _emval_call(
                 EM_VAL value,
@@ -81,9 +95,16 @@ namespace emscripten {
                 const char* methodName,
                 EM_VAR_ARGS argv);
             EM_VAL _emval_typeof(EM_VAL value);
+            bool _emval_instanceof(EM_VAL object, EM_VAL constructor);
+            bool _emval_is_number(EM_VAL object);
+            bool _emval_is_string(EM_VAL object);
+            bool _emval_in(EM_VAL item, EM_VAL object);
+            bool _emval_delete(EM_VAL object, EM_VAL property);
+            bool _emval_throw(EM_VAL object);
+            EM_VAL _emval_await(EM_VAL promise);
         }
 
-        template<const char* address> 
+        template<const char* address>
         struct symbol_registrar {
             symbol_registrar() {
                 internal::_emval_register_symbol(address);
@@ -266,15 +287,10 @@ namespace emscripten {
     class val {
     public:
         // missing operators:
-        // * delete
-        // * in
-        // * instanceof
-        // * ! ~ - + ++ --
+        // * ~ - + ++ --
         // * * / %
         // * + -
         // * << >> >>>
-        // * < <= > >=
-        // * == != === !==
         // * & ^ | && || ?:
         //
         // exposing void, comma, and conditional is unnecessary
@@ -282,6 +298,20 @@ namespace emscripten {
 
         static val array() {
             return val(internal::_emval_new_array());
+        }
+
+        template<typename Iter>
+        static val array(Iter begin, Iter end) {
+            val new_array = array();
+            for (auto it = begin; it != end; ++it) {
+                new_array.call<void>("push", *it);
+            }
+            return new_array;
+        }
+
+        template<typename T>
+        static val array(const std::vector<T>& vec) {
+            return array(vec.begin(), vec.end());
         }
 
         static val object() {
@@ -375,12 +405,52 @@ namespace emscripten {
             return handle == internal::EM_VAL(internal::_EMVAL_FALSE);
         }
 
+        bool isNumber() const {
+            return internal::_emval_is_number(handle);
+        }
+
+        bool isString() const {
+            return internal::_emval_is_string(handle);
+        }
+
+        bool isArray() const {
+            return instanceof(global("Array"));
+        }
+
         bool equals(const val& v) const {
             return internal::_emval_equals(handle, v.handle);
         }
 
+        bool operator==(const val& v) const {
+            return internal::_emval_equals(handle, v.handle);
+        }
+
+        bool operator!=(const val& v) const {
+            return !(*this == v);
+        }
+
         bool strictlyEquals(const val& v) const {
             return internal::_emval_strictly_equals(handle, v.handle);
+        }
+
+        bool operator>(const val& v) const {
+            return internal::_emval_greater_than(handle, v.handle);
+        }
+
+        bool operator>=(const val& v) const {
+            return (*this > v) || (*this == v);
+        }
+
+        bool operator<(const val& v) const {
+            return internal::_emval_less_than(handle, v.handle);
+        }
+
+        bool operator<=(const val& v) const {
+            return (*this < v) || (*this == v);
+        }
+
+        bool operator!() const {
+            return internal::_emval_not(handle);
         }
 
         template<typename... Args>
@@ -404,7 +474,7 @@ namespace emscripten {
         }
 
         template<typename... Args>
-        val operator()(Args&&... args) {
+        val operator()(Args&&... args) const {
             return internalCall(internal::_emval_call, std::forward<Args>(args)...);
         }
 
@@ -415,23 +485,53 @@ namespace emscripten {
             return MethodCaller<ReturnValue, Args...>::call(handle, name, std::forward<Args>(args)...);
         }
 
-        template<typename T>
-        T as() const {
+        template<typename T, typename ...Policies>
+        T as(Policies...) const {
             using namespace internal;
 
             typedef BindingType<T> BT;
+            typename WithPolicies<Policies...>::template ArgTypeList<T> targetType;
 
             EM_DESTRUCTORS destructors;
             EM_GENERIC_WIRE_TYPE result = _emval_as(
                 handle,
-                TypeID<T>::get(),
+                targetType.getTypes()[0],
                 &destructors);
             DestructorsRunner dr(destructors);
             return fromGenericWireType<T>(result);
         }
 
+// If code is not being compiled with GNU extensions enabled, typeof() is not a reserved keyword, so support that as a member function.
+#if __STRICT_ANSI__
         val typeof() const {
             return val(_emval_typeof(handle));
+        }
+#endif
+
+// Prefer calling val::typeOf() over val::typeof(), since this form works in both C++11 and GNU++11 build modes. "typeof" is a reserved word in GNU++11 extensions.
+        val typeOf() const {
+            return val(_emval_typeof(handle));
+        }
+
+        bool instanceof(const val& v) const {
+            return internal::_emval_instanceof(handle, v.handle);
+        }
+
+        bool in(const val& v) const {
+            return internal::_emval_in(handle, v.handle);
+        }
+
+        template<typename T>
+        bool delete_(const T& property) const {
+            return internal::_emval_delete(handle, val(property).handle);
+        }
+
+        void throw_() const {
+            internal::_emval_throw(handle);
+        }
+
+        val await() const {
+            return val(internal::_emval_await(handle));
         }
 
     private:
@@ -448,7 +548,7 @@ namespace emscripten {
         }
 
         template<typename Implementation, typename... Args>
-        val internalCall(Implementation impl, Args&&... args)const {
+        val internalCall(Implementation impl, Args&&... args) const {
             using namespace internal;
 
             WithPolicies<>::ArgTypeList<Args...> argList;
@@ -480,15 +580,33 @@ namespace emscripten {
         };
     }
 
-    template<typename T>
-    std::vector<T> vecFromJSArray(val v) {
-        auto l = v["length"].as<unsigned>();
+    template <typename T>
+    std::vector<T> vecFromJSArray(const val& v) {
+        const size_t l = v["length"].as<size_t>();
 
         std::vector<T> rv;
-        for(unsigned i = 0; i < l; ++i) {
+        rv.reserve(l);
+        for (size_t i = 0; i < l; ++i) {
             rv.push_back(v[i].as<T>());
         }
 
         return rv;
-    };
+    }
+
+    template <typename T>
+    std::vector<T> convertJSArrayToNumberVector(const val& v) {
+        const size_t l = v["length"].as<size_t>();
+
+        std::vector<T> rv;
+        rv.resize(l);
+
+        // Copy the array into our vector through the use of typed arrays.
+        // It will try to convert each element through Number().
+        // See https://www.ecma-international.org/ecma-262/6.0/#sec-%typedarray%.prototype.set-array-offset
+        // and https://www.ecma-international.org/ecma-262/6.0/#sec-tonumber
+        val memoryView{ typed_memory_view(l, rv.data()) };
+        memoryView.call<void>("set", v);
+
+        return rv;
+    }
 }

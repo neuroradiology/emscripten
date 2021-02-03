@@ -65,11 +65,18 @@ or via a ``<script>`` tag:
 
     <!doctype html>
     <html>
-      <script src="quick_example.js"></script>
       <script>
-        console.log('lerp result: ' + Module.lerp(1, 2, 0.5));
+        var Module = {
+          onRuntimeInitialized: function() {
+            console.log('lerp result: ' + Module.lerp(1, 2, 0.5));
+          }
+        };
       </script>
+      <script src="quick_example.js"></script>
     </html>
+
+.. note:: We use the ``onRuntimeInitialized`` callback to run code when the runtime is ready, which is an asynchronous operation (in order to compile WebAssembly).
+.. note:: Open the developer tools console to see the output of ``console.log``.
 
 The code in an :cpp:func:`EMSCRIPTEN_BINDINGS` block runs when the JavaScript
 file is initially loaded (at the same time as the global constructors). The
@@ -89,7 +96,18 @@ object.
    use whatever name you like for the module by assigning it to a new
    variable: ``var MyModuleName = Module;``.
 
+Binding libraries
+=================
 
+Binding code is run as a static constructor and static constructors only get
+run if the object file is included in the link, therefore when generating
+bindings for library files the compiler must be explicitly instructed to include
+the object file.
+
+For example, to generate bindings for a hypothetical **library.a** compiled
+with Emscripten run *emcc* with ``--whole-archive`` compiler flag::
+
+   emcc --bind -o library.js -Wl,--whole-archive library.a -Wl,--no-whole-archive
 
 Classes
 =======
@@ -150,7 +168,7 @@ shown below:
 
    var instance = new Module.MyClass(10, "hello");
    instance.incrementX();
-   instance.x; // 12
+   instance.x; // 11
    instance.x = 20; // 20
    Module.MyClass.getStringFromInstance(instance); // "hello"
    instance.delete();
@@ -198,6 +216,11 @@ Consider the example below:
         int age;
     };
 
+	// Array fields are treated as if they were std::array<type,size>
+	struct ArrayInStruct {
+		int field[2];
+	};
+
     PersonRecord findPersonAtLocation(Point2f);
 
     EMSCRIPTEN_BINDINGS(my_value_example) {
@@ -210,6 +233,16 @@ Consider the example below:
             .field("name", &PersonRecord::name)
             .field("age", &PersonRecord::age)
             ;
+
+		value_object<ArrayInStruct>("ArrayInStruct")
+			.field("field", &ArrayInStruct::field) // Need to register the array type
+			;
+
+		// Register std::array<int, 2> because ArrayInStruct::field is interpreted as such
+		value_array<std::array<int, 2>>("array_int_2")
+			.element(index<0>())
+			.element(index<1>())
+			;
 
         function("findPersonAtLocation", &findPersonAtLocation);
     }
@@ -246,7 +279,7 @@ For example:
 
 .. note::
 
-   Currently the markup serves only to whitelist smart pointer use, and
+   Currently the markup serves only to whitelist raw pointer use, and
    show that you've thought about the use of the raw pointers. Eventually
    we hope to implement `Boost.Python-like raw pointer policies`_ for
    managing object ownership.
@@ -320,7 +353,7 @@ smart pointer type:
 
     EMSCRIPTEN_BINDINGS(better_smart_pointers) {
         class_<C>("C")
-            .smart_ptr_constructor(&std::make_shared<C>)
+            .smart_ptr_constructor("C", &std::make_shared<C>)
             ;
     }
 
@@ -335,7 +368,7 @@ An alternative is to use :cpp:func:`~class_::smart_ptr` in the
     EMSCRIPTEN_BINDINGS(smart_pointers) {
         class_<C>("C")
             .constructor<>()
-            .smart_ptr<std::shared_ptr<C>>()
+            .smart_ptr<std::shared_ptr<C>>("C")
             ;
     }
 
@@ -647,7 +680,7 @@ Memory views should be treated like raw pointers; lifetime and validity
 are not managed by the runtime and it's easy to corrupt data if the
 underlying object is modified or deallocated.
 
-.. code::cpp
+.. code:: cpp
 
     #include <emscripten/bind.h>
     #include <emscripten/val.h>
@@ -667,7 +700,7 @@ underlying object is modified or deallocated.
 
 The calling JavaScript code will receive a typed array view into the emscripten heap:
 
-.. code::js
+.. code:: js
 
    var myUint8Array = Module.getBytes()
    var xhr = new XMLHttpRequest();
@@ -759,9 +792,9 @@ the context, and from this context we can create an ``oscillator``,
 :cpp:func:`~emscripten::val::set` its properties (again using ``val``)
 and then play the tone.
 
-The example can be compiled on the Linux/Mac OS X terminal with::
+The example can be compiled on the Linux/macOS terminal with::
 
-   ./emcc -O2 -Wall -Werror --bind -o oscillator.html oscillator.cpp
+   emcc -O2 -Wall -Werror --bind -o oscillator.html oscillator.cpp
 
 
 Built-in type conversions
@@ -769,41 +802,41 @@ Built-in type conversions
 
 Out of the box, *embind* provides converters for many standard C++ types:
 
-+---------------------+-------------------------------------------------+
-| C++ type            | JavaScript type                                 |
-+=====================+=================================================+
-| ``void``            | undefined                                       |
-+---------------------+-------------------------------------------------+
-| ``bool``            | true or false                                   |
-+---------------------+-------------------------------------------------+
-| ``char``            | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``signed char``     | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``unsigned char``   | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``short``           | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``unsigned short``  | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``int``             | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``unsigned int``    | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``long``            | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``unsigned long``   | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``float``           | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``double``          | Number                                          |
-+---------------------+-------------------------------------------------+
-| ``std::string``     | ArrayBuffer, Uint8Array, Int8Array, or String   |
-+---------------------+-------------------------------------------------+
-| ``std::wstring``    | String (UTF-16 code units)                      |
-+---------------------+-------------------------------------------------+
-| ``emscripten::val`` | anything                                        |
-+---------------------+-------------------------------------------------+
++---------------------+--------------------------------------------------------------------+
+| C++ type            | JavaScript type                                                    |
++=====================+====================================================================+
+| ``void``            | undefined                                                          |
++---------------------+--------------------------------------------------------------------+
+| ``bool``            | true or false                                                      |
++---------------------+--------------------------------------------------------------------+
+| ``char``            | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``signed char``     | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``unsigned char``   | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``short``           | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``unsigned short``  | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``int``             | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``unsigned int``    | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``long``            | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``unsigned long``   | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``float``           | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``double``          | Number                                                             |
++---------------------+--------------------------------------------------------------------+
+| ``std::string``     | ArrayBuffer, Uint8Array, Uint8ClampedArray, Int8Array, or String   |
++---------------------+--------------------------------------------------------------------+
+| ``std::wstring``    | String (UTF-16 code units)                                         |
++---------------------+--------------------------------------------------------------------+
+| ``emscripten::val`` | anything                                                           |
++---------------------+--------------------------------------------------------------------+
 
 For convenience, *embind* provides factory functions to register
 ``std::vector<T>`` (:cpp:func:`register_vector`) and ``std::map<K, V>``
@@ -815,6 +848,80 @@ For convenience, *embind* provides factory functions to register
         register_vector<int>("VectorInt");
         register_map<int,int>("MapIntInt");
     }
+
+A full example is shown below:
+
+.. code:: cpp
+
+    #include <emscripten/bind.h>
+    #include <string>
+    #include <vector>
+
+    using namespace emscripten;
+
+    std::vector<int> returnVectorData () {
+      std::vector<int> v(10, 1);
+      return v;
+    }
+
+    std::map<int, std::string> returnMapData () {
+      std::map<int, std::string> m;
+      m.insert(std::pair<int, std::string>(10, "This is a string."));
+      return m;
+    }
+
+    EMSCRIPTEN_BINDINGS(module) {
+      function("returnVectorData", &returnVectorData);
+      function("returnMapData", &returnMapData);
+
+      // register bindings for std::vector<int> and std::map<int, std::string>.
+      register_vector<int>("vector<int>");
+      register_map<int, std::string>("map<int, string>");
+    }
+
+
+The following JavaScript can be used to interact with the above C++.
+
+.. code:: js
+
+    var retVector = Module['returnVectorData']();
+
+    // vector size
+    var vectorSize = retVector.size();
+
+    // reset vector value
+    retVector.set(vectorSize - 1, 11);
+
+    // push value into vector
+    retVector.push_back(12);
+
+    // retrieve value from the vector
+    for (var i = 0; i < retVector.size(); i++) {
+        console.log("Vector Value: ", retVector.get(i));
+    }
+
+    // expand vector size
+    retVector.resize(20, 1);
+
+    var retMap = Module['returnMapData']();
+
+    // map size
+    var mapSize = retMap.size();
+
+    // retrieve value from map
+    console.log("Map Value: ", retMap.get(10));
+
+    // figure out which map keys are available
+    // NB! You must call `register_vector<key_type>`
+    // to make vectors available
+    var mapKeys = retMap.keys();
+    for (var i = 0; i < mapKeys.size(); i++) {
+        var key = mapKeys.get(i);
+        console.log("Map key/value: ", key, retMap.get(key));
+    }
+
+    // reset the value at the given index position
+    retMap.set(10, "OtherValue");
 
 
 Performance
@@ -828,7 +935,7 @@ The call overhead for simple functions has been measured at about 200 ns.
 While there is room for further optimisation, so far its performance in
 real-world applications has proved to be more than acceptable.
 
-.. _Test Suite: https://github.com/kripken/emscripten/tree/master/tests/embind
+.. _Test Suite: https://github.com/emscripten-core/emscripten/tree/master/tests/embind
 .. _Connecting C++ and JavaScript on the Web with Embind: http://chadaustin.me/2014/09/connecting-c-and-javascript-on-the-web-with-embind/
 .. _Boost.Python: http://www.boost.org/doc/libs/1_56_0/libs/python/doc/
 .. _finalizers: http://en.wikipedia.org/wiki/Finalizer

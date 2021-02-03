@@ -1,4 +1,8 @@
-# -*- coding: utf-8 -*-
+# Copyright 2014 The Emscripten Authors.  All rights reserved.
+# Emscripten is available under two separate licenses, the MIT license and the
+# University of Illinois/NCSA Open Source License.  Both these licenses can be
+# found in the LICENSE file.
+
 #
 # Emscripten documentation build configuration file, created by
 # sphinx-quickstart on Tue Jul 01 09:20:29 2014.
@@ -217,7 +221,7 @@ html_static_path = ['_static']
 #html_split_index = False
 
 # If true, links to the reST sources are added to the pages.
-#html_show_sourcelink = True
+html_show_sourcelink = False
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
 #html_show_sphinx = True
@@ -389,14 +393,6 @@ epub_exclude_files = ['search.html']
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {'http://docs.python.org/': None}
 
-# HamishW - set highlighting language.
-highlight_language = 'cpp'
+#highlight_language = 'default'
 
-# HamishW - set domain (cpp)
 primary_domain = 'cpp'
-
-# HamishW - tell Breathe about projects. Breathe is tool to convert Doxygen to Python objects, for import into Sphinx.
-#breathe_projects = { "myproject": "/home/me/docproj/doxyxml/", "nutshell":"./headers/xml/", }
-# HamishW - Specify a default project:
-#breathe_default_project = "nutshell"
-

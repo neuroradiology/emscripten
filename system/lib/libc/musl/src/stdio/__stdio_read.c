@@ -1,12 +1,5 @@
 #include "stdio_impl.h"
 #include <sys/uio.h>
-#include <pthread.h>
-
-static void cleanup(void *p)
-{
-	FILE *f = p;
-	if (!f->lockcount) __unlockfile(f);
-}
 
 size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 {
@@ -16,16 +9,17 @@ size_t __stdio_read(FILE *f, unsigned char *buf, size_t len)
 	};
 	ssize_t cnt;
 
-	if (libc.main_thread) {
-		pthread_cleanup_push(cleanup, f);
-		cnt = syscall_cp(SYS_readv, f->fd, iov, 2);
-		pthread_cleanup_pop(0);
-	} else {
-		cnt = syscall(SYS_readv, f->fd, iov, 2);
+#if __EMSCRIPTEN__
+	size_t num;
+	if (__wasi_syscall_ret(__wasi_fd_read(f->fd, (struct __wasi_iovec_t*)iov, 2, &num))) {
+		num = -1;
 	}
+	cnt = num;
+#else
+	cnt = syscall(SYS_readv, f->fd, iov, 2);
+#endif
 	if (cnt <= 0) {
 		f->flags |= F_EOF ^ ((F_ERR^F_EOF) & cnt);
-		f->rpos = f->rend = 0;
 		return cnt;
 	}
 	if (cnt <= iov[0].iov_len) return cnt;

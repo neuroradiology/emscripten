@@ -1,3 +1,10 @@
+/*
+ * Copyright 2013 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -18,15 +25,19 @@
 int serverfd = 0;
 int clientfd = 0;
 
+void cleanup_client() {
+  if (clientfd) {
+    close(clientfd);
+    clientfd = 0;
+  }
+}
+
 void cleanup() {
   if (serverfd) {
     close(serverfd);
     serverfd = 0;
   }
-  if (clientfd) {
-    close(clientfd);
-    clientfd = 0;
-  }
+  cleanup_client();
 }
 
 void do_send(int sockfd) {
@@ -50,15 +61,13 @@ void do_send(int sockfd) {
   for (i = 0; i < sizeof(buffers) / sizeof(char*); i++) {
     buffer = buffers[i];
 
-    res = send(sockfd, buffer, strlen(buffer), 0);
+    res = send(sockfd, buffer, strlen(buffer), MSG_NOSIGNAL);
     if (res == -1) {
       perror("send failed");
-      exit(EXIT_FAILURE);
+      return;
     }
     printf("sent \"%s\" (%d bytes)\n", buffer, res);
   }
-
-  exit(EXIT_SUCCESS);
 }
 
 void iter() {
@@ -85,6 +94,7 @@ void iter() {
 
   if (FD_ISSET(clientfd, &fdw)) {
     do_send(clientfd);
+    cleanup_client();
   }
 }
 

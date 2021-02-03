@@ -1,6 +1,11 @@
+// Copyright 2015 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
 #include <stdio.h>
 #include <emscripten.h>
-#include <html5.h>
+#include <emscripten/html5.h>
 static int result = 1;
 
 // The event handler functions can return 1 to suppress the event and disable the default action. That calls event.preventDefault();
@@ -15,7 +20,7 @@ extern "C"
     }
     else
     {
-      REPORT_RESULT();
+      REPORT_RESULT(result);
       emscripten_run_script("throw 'done'");
     }
     return 0;
@@ -47,9 +52,9 @@ int main(int argc, char **argv)
 {
   printf("main argc:%d\n", argc);
 
-  emscripten_set_keydown_callback("#document", 0, 1, keydown_callback);
-  emscripten_set_keypress_callback("#document", 0, 1, keypress_callback);
-  emscripten_set_keyup_callback("#document", 0, 1, keyup_callback);
+  emscripten_set_keydown_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, 0, 1, keydown_callback);
+  emscripten_set_keypress_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, 0, 1, keypress_callback);
+  emscripten_set_keyup_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, 0, 1, keyup_callback);
 
   return 0;
 }

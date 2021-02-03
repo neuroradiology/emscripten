@@ -1,9 +1,16 @@
+/*
+ * Copyright 2012 The Emscripten Authors.  All rights reserved.
+ * Emscripten is available under two separate licenses, the MIT license and the
+ * University of Illinois/NCSA Open Source License.  Both these licenses can be
+ * found in the LICENSE file.
+ */
+
 #include <stdio.h>
 #include <SDL/SDL.h>
 #include <emscripten.h>
 #include <string.h>
 
-static const int COLOR_COUNT = 32;
+#define COLOR_COUNT 32
 
 static SDL_Surface *screen;
 static SDL_Color   pal[COLOR_COUNT +1];
