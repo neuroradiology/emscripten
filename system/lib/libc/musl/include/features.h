@@ -16,6 +16,13 @@
 #define _XOPEN_SOURCE 700
 #endif
 
+#if defined(__EMSCRIPTEN__) && defined(_GNU_SOURCE)
+// In emscripten the LFS functions are kept around when _GNU_SOURCE is
+// defined, for increased compatabiliy. This is also what glibc does.
+#undef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE 1
+#endif
+
 #if __STDC_VERSION__ >= 199901L
 #define __restrict restrict
 #elif !defined(__GNUC__)
@@ -24,6 +31,8 @@
 
 #if __STDC_VERSION__ >= 199901L || defined(__cplusplus)
 #define __inline inline
+#elif !defined(__GNUC__)
+#define __inline
 #endif
 
 #if __STDC_VERSION__ >= 201112L
@@ -33,7 +42,6 @@
 #define _Noreturn
 #endif
 
-#define weak_alias(old, new) \
-	extern __typeof(old) new __attribute__((__weak__, __alias__(#old)))
+#define __REDIR(x,y) __typeof__(x) x __asm__(#y)
 
 #endif

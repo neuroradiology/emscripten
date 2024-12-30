@@ -3,154 +3,200 @@
 # University of Illinois/NCSA Open Source License.  Both these licenses can be
 # found in the LICENSE file.
 
+"""Permanent cache for system libraries and ports.
+"""
+
 import contextlib
 import logging
 import os
-from . import tempfiles, filelock, config, utils
+from pathlib import Path
+
+from . import filelock, config, utils
+from .settings import settings
 
 logger = logging.getLogger('cache')
 
 
-# Permanent cache for system librarys and ports
-class Cache:
-  def __init__(self, dirname):
-    # figure out the root directory for all caching
-    dirname = os.path.normpath(dirname)
-    self.dirname = dirname
-    self.acquired_count = 0
+acquired_count = 0
+cachedir = None
+cachelock = None
+cachelock_name = None
 
-    # since the lock itself lives inside the cache directory we need to ensure it
-    # exists.
-    self.ensure()
-    self.filelock_name = os.path.join(dirname, 'cache.lock')
-    self.filelock = filelock.FileLock(self.filelock_name)
 
-  def acquire_cache_lock(self):
-    if config.FROZEN_CACHE:
-      # Raise an exception here rather than exit_with_error since in practice this
-      # should never happen
-      raise Exception('Attempt to lock the cache but FROZEN_CACHE is set')
+def is_writable(path):
+  return os.access(path, os.W_OK)
 
-    if self.acquired_count == 0:
-      logger.debug('PID %s acquiring multiprocess file lock to Emscripten cache at %s' % (str(os.getpid()), self.dirname))
-      # This should never happen because any calls to emcc make when populating the
-      # cache should not themselves attempt to acquire the cache lock.  For example,
-      # it should never be the case that while holding the cache lock to build libraryA
-      # a build of libraryB is needed.  This would be a bug in the dependency graph
-      # since if libraryA depended on libraryB it should already have been built and
-      # cached before the libraryA build started.
-      assert 'EM_PARENT_HOLDS_CACHE_LOCK' not in os.environ
-      try:
-        self.filelock.acquire(60)
-      except filelock.Timeout:
-        logger.warning('Accessing the Emscripten cache at "' + self.dirname + '" is taking a long time, another process should be writing to it. If there are none and you suspect this process has deadlocked, try deleting the lock file "' + self.filelock_name + '" and try again. If this occurs deterministically, consider filing a bug.')
-        self.filelock.acquire()
 
-      os.environ['EM_PARENT_HOLDS_CACHE_LOCK'] = '1'
-      logger.debug('done')
-    self.acquired_count += 1
+def acquire_cache_lock(reason):
+  global acquired_count
+  if config.FROZEN_CACHE:
+    # Raise an exception here rather than exit_with_error since in practice this
+    # should never happen
+    raise Exception('Attempt to lock the cache but FROZEN_CACHE is set')
 
-  def release_cache_lock(self):
-    self.acquired_count -= 1
-    assert self.acquired_count >= 0, "Called release more times than acquire"
-    if self.acquired_count == 0:
-      self.filelock.release()
-      del os.environ['EM_PARENT_HOLDS_CACHE_LOCK']
-      logger.debug('PID %s released multiprocess file lock to Emscripten cache at %s' % (str(os.getpid()), self.dirname))
+  if not is_writable(cachedir):
+    utils.exit_with_error(f'cache directory "{cachedir}" is not writable while accessing cache for: {reason} (see https://emscripten.org/docs/tools_reference/emcc.html for info on setting the cache directory)')
 
-  @contextlib.contextmanager
-  def lock(self):
-    """A context manager that performs actions in the given directory."""
-    self.acquire_cache_lock()
+  if acquired_count == 0:
+    logger.debug(f'PID {os.getpid()} acquiring multiprocess file lock to Emscripten cache at {cachedir}')
+    assert 'EM_CACHE_IS_LOCKED' not in os.environ, f'attempt to lock the cache while a parent process is holding the lock ({reason})'
     try:
-      yield
-    finally:
-      self.release_cache_lock()
+      cachelock.acquire(60)
+    except filelock.Timeout:
+      logger.warning(f'Accessing the Emscripten cache at "{cachedir}" (for "{reason}") is taking a long time, another process should be writing to it. If there are none and you suspect this process has deadlocked, try deleting the lock file "{cachelock_name}" and try again. If this occurs deterministically, consider filing a bug.')
+      cachelock.acquire()
 
-  def ensure(self):
-    utils.safe_ensure_dirs(self.dirname)
+    os.environ['EM_CACHE_IS_LOCKED'] = '1'
+    logger.debug('done')
+  acquired_count += 1
 
-  def erase(self):
-    with self.lock():
-      if os.path.exists(self.dirname):
-        for f in os.listdir(self.dirname):
-          tempfiles.try_delete(os.path.join(self.dirname, f))
 
-  def get_path(self, name):
-    return os.path.join(self.dirname, name)
+def release_cache_lock():
+  global acquired_count
+  acquired_count -= 1
+  assert acquired_count >= 0, "Called release more times than acquire"
+  if acquired_count == 0:
+    assert os.environ['EM_CACHE_IS_LOCKED'] == '1'
+    del os.environ['EM_CACHE_IS_LOCKED']
+    cachelock.release()
+    logger.debug(f'PID {os.getpid()} released multiprocess file lock to Emscripten cache at {cachedir}')
 
-  def get_sysroot_dir(self, absolute):
-    if absolute:
-      return os.path.join(self.dirname, 'sysroot')
-    return 'sysroot'
 
-  def get_include_dir(self):
-    return os.path.join(self.get_sysroot_dir(absolute=True), 'include')
+@contextlib.contextmanager
+def lock(reason):
+  """A context manager that performs actions in the given directory."""
+  acquire_cache_lock(reason)
+  try:
+    yield
+  finally:
+    release_cache_lock()
 
-  def get_lib_dir(self, absolute):
-    path = os.path.join(self.get_sysroot_dir(absolute=absolute), 'lib')
-    if shared.Settings.MEMORY64:
-      path = os.path.join(path, 'wasm64-emscripten')
+
+def ensure():
+  ensure_setup()
+  if not os.path.isdir(cachedir):
+    try:
+      utils.safe_ensure_dirs(cachedir)
+    except Exception as e:
+      utils.exit_with_error(f'unable to create cache directory "{cachedir}": {e} (see https://emscripten.org/docs/tools_reference/emcc.html for info on setting the cache directory)')
+
+
+def erase():
+  ensure_setup()
+  with lock('erase'):
+    # Delete everything except the lockfile itself
+    utils.delete_contents(cachedir, exclude=[os.path.basename(cachelock_name)])
+
+
+def get_path(name):
+  ensure_setup()
+  return Path(cachedir, name)
+
+
+def get_sysroot(absolute):
+  ensure_setup()
+  if absolute:
+    return os.path.join(cachedir, 'sysroot')
+  return 'sysroot'
+
+
+def get_include_dir(*parts):
+  return str(get_sysroot_dir('include', *parts))
+
+
+def get_sysroot_dir(*parts):
+  return str(Path(get_sysroot(absolute=True), *parts))
+
+
+def get_lib_dir(absolute):
+  ensure_setup()
+  path = Path(get_sysroot(absolute=absolute), 'lib')
+  if settings.MEMORY64:
+    path = Path(path, 'wasm64-emscripten')
+  else:
+    path = Path(path, 'wasm32-emscripten')
+  # if relevant, use a subdir of the cache
+  subdir = []
+  if settings.LTO:
+    if settings.LTO == 'thin':
+      subdir.append('thinlto')
     else:
-      path = os.path.join(path, 'wasm32-emscripten')
-    # if relevant, use a subdir of the cache
-    subdir = []
-    if shared.Settings.LTO:
       subdir.append('lto')
-    if shared.Settings.RELOCATABLE:
-      subdir.append('pic')
-    if subdir:
-      path = os.path.join(path, '-'.join(subdir))
-    return path
+  if settings.RELOCATABLE:
+    subdir.append('pic')
+  if subdir:
+    path = Path(path, '-'.join(subdir))
+  return path
 
-  def get_lib_name(self, name):
-    return os.path.join(self.get_lib_dir(absolute=False), name)
 
-  def erase_lib(self, name):
-    self.erase_file(self.get_lib_name(name))
+def get_lib_name(name, absolute=False):
+  return str(get_lib_dir(absolute=absolute).joinpath(name))
 
-  def erase_file(self, shortname):
-    with self.lock():
-      name = os.path.join(self.dirname, shortname)
-      if os.path.exists(name):
-        logger.info('deleting cached file: %s', name)
-        tempfiles.try_delete(name)
 
-  def get_lib(self, libname, *args, **kwargs):
-    name = self.get_lib_name(libname)
-    return self.get(name, *args, **kwargs)
+def erase_lib(name):
+  erase_file(get_lib_name(name))
 
-  # Request a cached file. If it isn't in the cache, it will be created with
-  # the given creator function
-  def get(self, shortname, creator, what=None, force=False):
-    cachename = os.path.join(self.dirname, shortname)
-    cachename = os.path.abspath(cachename)
-    # Check for existence before taking the lock in case we can avoid the
-    # lock completely.
-    if os.path.exists(cachename) and not force:
-      return cachename
 
-    if config.FROZEN_CACHE:
-      # Raise an exception here rather than exit_with_error since in practice this
-      # should never happen
-      raise Exception('FROZEN_CACHE is set, but cache file is missing: %s' % shortname)
+def erase_file(shortname):
+  with lock('erase: ' + shortname):
+    name = Path(cachedir, shortname)
+    if name.exists():
+      logger.info(f'deleting cached file: {name}')
+      utils.delete_file(name)
 
-    with self.lock():
-      if os.path.exists(cachename) and not force:
-        return cachename
-      if what is None:
-        if shortname.endswith(('.bc', '.so', '.a')):
-          what = 'system library'
-        else:
-          what = 'system asset'
-      message = 'generating ' + what + ': ' + shortname + '... (this will be cached in "' + cachename + '" for subsequent builds)'
-      logger.info(message)
-      utils.safe_ensure_dirs(os.path.dirname(cachename))
-      creator(cachename)
-      assert os.path.exists(cachename)
+
+def get_lib(libname, *args, **kwargs):
+  name = get_lib_name(libname)
+  return get(name, *args, **kwargs)
+
+
+# Request a cached file. If it isn't in the cache, it will be created with
+# the given creator function
+def get(shortname, creator, what=None, force=False, quiet=False, deferred=False):
+  ensure_setup()
+  cachename = Path(cachedir, shortname)
+  # Check for existence before taking the lock in case we can avoid the
+  # lock completely.
+  if cachename.exists() and not force:
+    return str(cachename)
+
+  if config.FROZEN_CACHE:
+    # Raise an exception here rather than exit_with_error since in practice this
+    # should never happen
+    raise Exception(f'FROZEN_CACHE is set, but cache file is missing: "{shortname}" (in cache root path "{cachedir}")')
+
+  with lock(shortname):
+    if cachename.exists() and not force:
+      return str(cachename)
+    if what is None:
+      if shortname.endswith(('.bc', '.so', '.a')):
+        what = 'system library'
+      else:
+        what = 'system asset'
+    message = f'generating {what}: {shortname}... (this will be cached in "{cachename}" for subsequent builds)'
+    logger.info(message)
+    utils.safe_ensure_dirs(cachename.parent)
+    creator(str(cachename))
+    if not deferred:
+      assert cachename.exists()
+    if not quiet:
       logger.info(' - ok')
 
-    return cachename
+  return str(cachename)
 
 
-from . import shared
+def setup():
+  global cachedir, cachelock, cachelock_name
+  # figure out the root directory for all caching
+  cachedir = Path(config.CACHE).resolve()
+
+  # since the lock itself lives inside the cache directory we need to ensure it
+  # exists.
+  ensure()
+  cachelock_name = Path(cachedir, 'cache.lock')
+  cachelock = filelock.FileLock(cachelock_name)
+
+
+def ensure_setup():
+  if not cachedir:
+    setup()

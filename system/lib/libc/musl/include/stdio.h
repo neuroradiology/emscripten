@@ -15,6 +15,10 @@ extern "C" {
 #define __NEED___isoc_va_list
 #define __NEED_size_t
 
+#if __STDC_VERSION__ < 201112L
+#define __NEED_struct__IO_FILE
+#endif
+
 #if defined(_POSIX_SOURCE) || defined(_POSIX_C_SOURCE) \
  || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
  || defined(_BSD_SOURCE)
@@ -25,7 +29,9 @@ extern "C" {
 
 #include <bits/alltypes.h>
 
-#ifdef __cplusplus
+#if __cplusplus >= 201103L && !defined(__EMSCRIPTEN__)
+#define NULL nullptr
+#elif defined(__cplusplus)
 #define NULL 0L
 #else
 #define NULL ((void*)0)
@@ -59,6 +65,7 @@ extern "C" {
 
 typedef union _G_fpos64_t {
 	char __opaque[16];
+	long long __lldata;
 	double __align;
 } fpos_t;
 
@@ -192,9 +199,23 @@ int vasprintf(char **, const char *, __isoc_va_list);
 #ifdef _GNU_SOURCE
 char *fgets_unlocked(char *, int, FILE *);
 int fputs_unlocked(const char *, FILE *);
+
+typedef ssize_t (cookie_read_function_t)(void *, char *, size_t);
+typedef ssize_t (cookie_write_function_t)(void *, const char *, size_t);
+typedef int (cookie_seek_function_t)(void *, off_t *, int);
+typedef int (cookie_close_function_t)(void *);
+
+typedef struct _IO_cookie_io_functions_t {
+	cookie_read_function_t *read;
+	cookie_write_function_t *write;
+	cookie_seek_function_t *seek;
+	cookie_close_function_t *close;
+} cookie_io_functions_t;
+
+FILE *fopencookie(void *, const char *, cookie_io_functions_t);
 #endif
 
-#if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
+#if defined(_LARGEFILE64_SOURCE)
 #define tmpfile64 tmpfile
 #define fopen64 fopen
 #define freopen64 freopen

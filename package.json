@@ -1,19 +1,30 @@
 {
   "private": true,
   "devDependencies": {
-    "es-check": "^5.1.0",
-    "eslint": "^7.18.0",
-    "eslint-config-google": "^0.14.0",
-    "ws": "~0.4.28"
+    "@eslint/eslintrc": "^3.1.0",
+    "@eslint/js": "^9.9.1",
+    "es-check": "^7.2.1",
+    "eslint": "^9.9.1",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.9.0",
+    "prettier": "^3.3.3",
+    "source-map": "0.7.4",
+    "typescript": "^5.5.4",
+    "webpack": "^5.94.0",
+    "webpack-cli": "^5.1.4",
+    "ws": "^8.18.0"
   },
   "dependencies": {
-    "acorn": "7.3.1",
-    "google-closure-compiler": "20200920.0.0",
-    "html-minifier-terser": "5.0.2",
-    "source-map": "0.5.6",
-    "wasm2c": "1.0.0"
+    "@babel/cli": "^7.25.6",
+    "@babel/core": "^7.25.2",
+    "@babel/preset-env": "^7.25.4",
+    "acorn": "^8.12.1",
+    "google-closure-compiler": "20240317.0.0",
+    "html-minifier-terser": "7.2.0"
   },
   "scripts": {
-    "lint": "eslint src/parseTools.js"
+    "lint": "eslint .",
+    "fmt": "prettier --write src/*.mjs tools/*.mjs",
+    "check": "prettier --check src/*.mjs tools/*.mjs"
   }
 }

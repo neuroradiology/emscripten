@@ -20,10 +20,11 @@ change can then be copied back into emscripten using this script.
 import os
 import sys
 import shutil
-import subprocess
 
 script_dir = os.path.abspath(os.path.dirname(__file__))
 local_src = os.path.join(script_dir, 'libc', 'musl')
+emscripten_root = os.path.dirname(os.path.dirname(script_dir))
+default_musl_dir = os.path.join(os.path.dirname(emscripten_root), 'musl')
 exclude_dirs = (
   # Top level directories we don't include
   'tools', 'obj', 'lib', 'crt', 'musl', 'compat',
@@ -32,14 +33,42 @@ exclude_dirs = (
   # Arch-specific code we don't use
   'arm', 'x32', 'sh', 'i386', 'x86_64', 'aarch64', 'riscv64',
   's390x', 'mips', 'mips64', 'mipsn32', 'powerpc', 'powerpc64',
-  'm68k', 'microblaze', 'or1k', 'generic')
+  'm68k', 'microblaze', 'or1k')
+exclude_files = (
+  'aio.h',
+  'sendfile.h',
+  'auxv.h',
+  'personality.h',
+  'klog.h',
+  'fanotify.h',
+  'vt.h',
+  'swap.h',
+  'reboot.h',
+  'quota.h',
+  'kd.h',
+  'io.h',
+  'fsuid.h',
+  'epoll.h',
+  'inotify.h',
+  'timerfd.h',
+  'timex.h',
+  'cachectl.h',
+  'soundcard.h',
+  'eventfd.h',
+  'signalfd.h',
+  'ptrace.h',
+  'prctl.h',
+)
 
 
-musl_dir = os.path.abspath(sys.argv[1])
+if len(sys.argv) > 1:
+  musl_dir = os.path.abspath(sys.argv[1])
+else:
+  musl_dir = default_musl_dir
 
 
 def should_ignore(name):
-  return name in exclude_dirs or name[0] == '.'
+  return name in exclude_dirs or name[0] == '.' or name in exclude_files
 
 
 def ignore(dirname, contents):
@@ -54,6 +83,11 @@ def main():
 
   # Copy new version into place
   shutil.copytree(musl_dir, local_src, ignore=ignore)
+
+  # Create version.h
+  version = open(os.path.join(local_src, 'VERSION')).read().strip()
+  with open(os.path.join(local_src, 'src', 'internal', 'version.h'), 'w') as f:
+    f.write('#define VERSION "%s"\n' % version)
 
 
 if __name__ == '__main__':

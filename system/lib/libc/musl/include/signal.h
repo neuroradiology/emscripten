@@ -75,6 +75,8 @@ typedef struct sigaltstack stack_t;
 #define SEGV_ACCERR 2
 #define SEGV_BNDERR 3
 #define SEGV_PKUERR 4
+#define SEGV_MTEAERR 8
+#define SEGV_MTESERR 9
 
 #define BUS_ADRALN 1
 #define BUS_ADRERR 2
@@ -176,18 +178,31 @@ struct sigaction {
 #define sa_handler   __sa_handler.sa_handler
 #define sa_sigaction __sa_handler.sa_sigaction
 
+#define SA_UNSUPPORTED 0x00000400
+#define SA_EXPOSE_TAGBITS 0x00000800
+
 struct sigevent {
 	union sigval sigev_value;
 	int sigev_signo;
 	int sigev_notify;
-	void (*sigev_notify_function)(union sigval);
-	pthread_attr_t *sigev_notify_attributes;
-	char __pad[56-3*sizeof(long)];
+	union {
+		char __pad[64 - 2*sizeof(int) - sizeof(union sigval)];
+		pid_t sigev_notify_thread_id;
+		struct {
+			void (*sigev_notify_function)(union sigval);
+			pthread_attr_t *sigev_notify_attributes;
+		} __sev_thread;
+	} __sev_fields;
 };
+
+#define sigev_notify_thread_id __sev_fields.sigev_notify_thread_id
+#define sigev_notify_function __sev_fields.__sev_thread.sigev_notify_function
+#define sigev_notify_attributes __sev_fields.__sev_thread.sigev_notify_attributes
 
 #define SIGEV_SIGNAL 0
 #define SIGEV_NONE 1
 #define SIGEV_THREAD 2
+#define SIGEV_THREAD_ID 4
 
 int __libc_current_sigrtmin(void);
 int __libc_current_sigrtmax(void);
@@ -210,7 +225,7 @@ int sigpending(sigset_t *);
 int sigwait(const sigset_t *__restrict, int *__restrict);
 int sigwaitinfo(const sigset_t *__restrict, siginfo_t *__restrict);
 int sigtimedwait(const sigset_t *__restrict, siginfo_t *__restrict, const struct timespec *__restrict);
-int sigqueue(pid_t, int, const union sigval);
+int sigqueue(pid_t, int, union sigval);
 
 int pthread_sigmask(int, const sigset_t *__restrict, sigset_t *__restrict);
 int pthread_kill(pthread_t, int);
@@ -231,6 +246,9 @@ int sigrelse(int);
 void (*sigset(int, void (*)(int)))(int);
 #define TRAP_BRKPT 1
 #define TRAP_TRACE 2
+#define TRAP_BRANCH 3
+#define TRAP_HWBKPT 4
+#define TRAP_UNK 5
 #define POLL_IN 1
 #define POLL_OUT 2
 #define POLL_MSG 3
@@ -239,11 +257,16 @@ void (*sigset(int, void (*)(int)))(int);
 #define POLL_HUP 6
 #define SS_ONSTACK    1
 #define SS_DISABLE    2
+#define SS_AUTODISARM (1U << 31)
+#define SS_FLAG_BITS SS_AUTODISARM
 #endif
 
 #if defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
 #define NSIG _NSIG
 typedef void (*sig_t)(int);
+
+#define SYS_SECCOMP 1
+#define SYS_USER_DISPATCH 2
 #endif
 
 #ifdef _GNU_SOURCE
@@ -259,12 +282,20 @@ int sigandset(sigset_t *, const sigset_t *, const sigset_t *);
 
 #define SIG_ERR  ((void (*)(int))-1)
 #define SIG_DFL  ((void (*)(int)) 0)
-#define SIG_IGN  ((void (*)(int)) 1)
+#define SIG_IGN  ((void (*)(int))-2) /* XXX EMSCRIPTEN: use -2 since 1 is a valid function address */
 
 typedef int sig_atomic_t;
 
 void (*signal(int, void (*)(int)))(int);
 int raise(int);
+
+#if _REDIR_TIME64
+#if defined(_POSIX_SOURCE) || defined(_POSIX_C_SOURCE) \
+ || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
+ || defined(_BSD_SOURCE)
+__REDIR(sigtimedwait, __sigtimedwait_time64);
+#endif
+#endif
 
 #ifdef __cplusplus
 }
